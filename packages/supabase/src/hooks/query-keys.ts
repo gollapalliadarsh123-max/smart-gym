@@ -1,0 +1,21 @@
+export const queryKeys = {
+  session: ['session'] as const,
+  profile: (userId: string) => ['profile', userId] as const,
+  gym: (gymId: string) => ['gym', gymId] as const,
+  gymByCode: (code: string) => ['gym', 'code', code] as const,
+  activeMembership: (userId: string) => ['membership', 'active', userId] as const,
+  gymMembers: (gymId: string, status?: string) => ['gym-members', gymId, status ?? 'all'] as const,
+  joinRequests: (gymId: string) => ['join-requests', gymId] as const,
+  payments: (filters: Record<string, unknown>) => ['payments', filters] as const,
+  dietLog: (userId: string, date: string) => ['diet-log', userId, date] as const,
+  dietLogs: (userId: string) => ['diet-logs', userId] as const,
+  leagueSeason: (userId: string, seasonId: string) => ['league-season', userId, seasonId] as const,
+  leagueLeaderboard: (seasonId: string) => ['league-leaderboard', seasonId] as const,
+  notifications: (gymId: string) => ['notifications', gymId] as const,
+  friendRequests: (userId: string) => ['friend-requests', userId] as const,
+  chat: (userId: string, otherUserId: string) => ['chat', userId, otherUserId] as const,
+  attendanceToday: (gymId: string, date: string) => ['attendance-today', gymId, date] as const,
+  attendanceHistory: (gymId: string, from: string, to: string) =>
+    ['attendance-history', gymId, from, to] as const,
+  dailyAttendanceCode: (gymId: string) => ['daily-attendance-code', gymId] as const,
+};

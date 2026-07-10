@@ -1,0 +1,36 @@
+{
+  "name": "smart-gym",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@smart-gym/web",
+    "dev:mobile": "turbo run dev --filter=@smart-gym/mobile",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset",
+    "db:types": "node scripts/db-types.mjs",
+    "db:link": "supabase link --project-ref rbtfjshktqabnswvxrmi",
+    "db:deploy-functions": "supabase functions deploy mark-attendance && supabase functions deploy generate-daily-code && supabase functions deploy self-check-in"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "supabase": "^2.109.1",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.9.2"
+}
