@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { OwnerMembersPanel } from '@/features/owner/components/owner-members-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Members',
-};
-
-export default function OwnerMembersPage() {
-  return <OwnerMembersPanel />;
+export default function OwnerSubpageRedirect() {
+  redirect('/owner');
 }

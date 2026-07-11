@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { MemberNotificationsPanel } from '@/features/member/components/member-notifications-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Notifications',
-};
-
-export default function MemberNotificationsPage() {
-  return <MemberNotificationsPanel />;
+export default function MemberSubpageRedirect() {
+  redirect('/member');
 }

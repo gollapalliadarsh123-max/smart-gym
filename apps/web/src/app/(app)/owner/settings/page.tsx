@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { OwnerSettingsForm } from '@/features/owner/components/owner-settings-form';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Gym settings',
-};
-
-export default function OwnerSettingsPage() {
-  return <OwnerSettingsForm />;
+export default function OwnerSubpageRedirect() {
+  redirect('/owner');
 }

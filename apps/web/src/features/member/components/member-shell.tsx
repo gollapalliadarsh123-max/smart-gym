@@ -1,67 +1,33 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { APP_NAME } from '@smart-gym/shared';
-import { Dumbbell } from 'lucide-react';
-import { SignOutButton } from '@/features/auth/components/sign-out-button';
-import { ThemeToggle } from '@/components/layout/theme-toggle';
-import { cn } from '@/lib/utils';
+import { DashboardShell } from '@/features/dashboard/components/dashboard-shell';
+import { useMemberContext } from '@/features/member/components/member-provider';
 import type { ReactNode } from 'react';
 
-const NAV: { href: string; label: string; exact?: boolean }[] = [
-  { href: '/member', label: 'Home', exact: true },
+const NAV = [
+  { href: '/member', label: 'Dashboard', exact: true },
+  { href: '/member/notifications', label: 'Notifications' },
   { href: '/member/attendance', label: 'Attendance' },
-  { href: '/member/diet', label: 'Diet' },
-  { href: '/member/league', label: 'League' },
-  { href: '/member/friends', label: 'Friends' },
   { href: '/member/payments', label: 'Payments' },
-  { href: '/member/notifications', label: 'Alerts' },
+  { href: '/member/diet', label: 'Diet', icon: '✦' },
+  { href: '/member/league', label: 'Leaderboard', icon: '✦' },
+  { href: '/member/friends', label: 'Friends & Chat', icon: '✦' },
 ];
 
 export function MemberShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const { profile, gym } = useMemberContext();
+  const name =
+    profile?.full_name?.trim() ||
+    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
+    'Member';
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="border-b border-border/60 bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link href="/member" className="flex shrink-0 items-center gap-2 font-semibold">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Dumbbell className="size-4" />
-            </span>
-            <span className="hidden sm:inline">{APP_NAME}</span>
-          </Link>
-
-          <nav className="flex flex-1 items-center justify-center gap-1 overflow-x-auto" aria-label="Member">
-            {NAV.map((item) => {
-              const active = item.exact
-                ? pathname === item.href
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors',
-                    active
-                      ? 'bg-muted font-medium text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <ThemeToggle />
-            <SignOutButton />
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">{children}</main>
-    </div>
+    <DashboardShell
+      title={name}
+      subtitle={gym?.code ? `GYM ${gym.code}` : 'Smart Gym'}
+      nav={NAV}
+    >
+      {children}
+    </DashboardShell>
   );
 }

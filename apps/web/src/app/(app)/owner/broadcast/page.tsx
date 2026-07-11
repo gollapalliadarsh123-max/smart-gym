@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { OwnerBroadcastPanel } from '@/features/owner/components/owner-broadcast-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Broadcast',
-};
-
-export default function OwnerBroadcastPage() {
-  return <OwnerBroadcastPanel />;
+export default function OwnerSubpageRedirect() {
+  redirect('/owner');
 }

@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { MemberAttendancePanel } from '@/features/attendance/components/member-attendance-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Attendance',
-};
-
-export default function MemberAttendancePage() {
-  return <MemberAttendancePanel />;
+export default function MemberSubpageRedirect() {
+  redirect('/member');
 }

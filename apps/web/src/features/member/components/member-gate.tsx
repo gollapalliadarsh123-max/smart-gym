@@ -7,28 +7,36 @@ export function MemberGate({ children }: { children: ReactNode }) {
   const { isLoading, error, userId, membership } = useMemberContext();
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading your membership…</p>;
+    return <p className="message-text">Loading your membership…</p>;
   }
 
   if (error) {
     return (
-      <p className="text-sm text-destructive" role="alert">
+      <p className="message-text" role="alert" style={{ color: 'var(--danger)' }}>
         {error.message}
       </p>
     );
   }
 
   if (!userId) {
-    return <p className="text-sm text-muted-foreground">Sign in required.</p>;
+    return <p className="message-text">Sign in required.</p>;
   }
 
   if (!membership) {
     return (
-      <div className="space-y-2 rounded-xl border border-dashed border-border/80 bg-muted/30 p-8">
-        <h2 className="text-lg font-medium">No active membership</h2>
-        <p className="text-sm text-muted-foreground">
-          Join a gym with its code, then wait for the owner to approve you before using attendance.
-        </p>
+      <div className="dashboard-layout">
+        <main className="main-content" style={{ margin: '40px auto', maxWidth: 560 }}>
+          <div className="panel-card">
+            <div className="card-header">
+              <h3>No active membership</h3>
+              <span className="tag">Join required</span>
+            </div>
+            <p className="message-text">
+              Join a gym with its code, then wait for the owner to approve you before using the
+              dashboard.
+            </p>
+          </div>
+        </main>
       </div>
     );
   }

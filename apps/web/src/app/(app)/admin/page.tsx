@@ -9,9 +9,10 @@ export default function AdminDashboardPage() {
   return (
     <DashboardShell
       title="Platform admin"
-      description="Cross-gym administration. Platform tools will expand in later modules."
+      subtitle="Cross-gym administration"
+      nav={[{ href: '/admin', label: 'Dashboard', exact: true }]}
     >
-      <div className="rounded-xl border border-dashed border-border/80 bg-muted/30 p-8 text-sm text-muted-foreground">
+      <div className="sg-panel text-sm text-muted-foreground">
         Admin shell is ready for authenticated platform admins.
       </div>
     </DashboardShell>

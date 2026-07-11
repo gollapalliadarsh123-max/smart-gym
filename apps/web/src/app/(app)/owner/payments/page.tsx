@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { OwnerPaymentsPanel } from '@/features/owner/components/owner-payments-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Payments',
-};
-
-export default function OwnerPaymentsPage() {
-  return <OwnerPaymentsPanel />;
+export default function OwnerSubpageRedirect() {
+  redirect('/owner');
 }

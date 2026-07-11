@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { MemberDietPanel } from '@/features/member/components/member-diet-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Diet',
-};
-
-export default function MemberDietPage() {
-  return <MemberDietPanel />;
+export default function MemberSubpageRedirect() {
+  redirect('/member');
 }

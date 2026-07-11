@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import { MemberSocialPanel } from '@/features/member/components/member-social-panel';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Friends',
-};
-
-export default function MemberFriendsPage() {
-  return <MemberSocialPanel />;
+export default function MemberSubpageRedirect() {
+  redirect('/member');
 }

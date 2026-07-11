@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { MemberHome } from '@/features/member/components/member-home';
+import { MemberLegacyDashboard } from '@/features/legacy-ui/member-legacy-dashboard';
 
 export const metadata: Metadata = {
   title: 'Member dashboard',
 };
 
-export default function MemberDashboardPage() {
-  return <MemberHome />;
+export default function MemberPage() {
+  return <MemberLegacyDashboard />;
 }

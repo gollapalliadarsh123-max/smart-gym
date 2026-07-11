@@ -9,9 +9,10 @@ export default function TrainerDashboardPage() {
   return (
     <DashboardShell
       title="Trainer dashboard"
-      description="View assigned members and attendance tools. Trainer workflows arrive in a later module."
+      subtitle="Assigned members & attendance"
+      nav={[{ href: '/trainer', label: 'Dashboard', exact: true }]}
     >
-      <div className="rounded-xl border border-dashed border-border/80 bg-muted/30 p-8 text-sm text-muted-foreground">
+      <div className="sg-panel text-sm text-muted-foreground">
         Your trainer workspace shell is ready.
       </div>
     </DashboardShell>
