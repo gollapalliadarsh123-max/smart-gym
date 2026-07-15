@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   getDashboardPath,
-  isAuthPath,
   isProtectedPath,
   roleForPath,
   type UserRole,
@@ -42,7 +41,6 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isProtected = isProtectedPath(pathname);
-  const isAuth = isAuthPath(pathname);
 
   if (!user && isProtected) {
     const redirectUrl = request.nextUrl.clone();
@@ -51,7 +49,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && (isProtected || isAuth)) {
+  // Keep /login and /signup reachable even with an existing session so users
+  // can enter credentials or switch accounts instead of being force-routed
+  // to their previous dashboard.
+  if (user && isProtected) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -60,15 +61,8 @@ export async function updateSession(request: NextRequest) {
 
     const role = (profile?.role ?? 'member') as UserRole;
     const dashboard = getDashboardPath(role);
-
-    if (isAuth) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = dashboard;
-      redirectUrl.search = '';
-      return NextResponse.redirect(redirectUrl);
-    }
-
     const requiredRole = roleForPath(pathname);
+
     if (requiredRole && requiredRole !== role && role !== 'platform_admin') {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = dashboard;

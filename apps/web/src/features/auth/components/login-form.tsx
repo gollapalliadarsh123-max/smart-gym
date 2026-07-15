@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getDashboardPath, loginSchema, type LoginInput } from '@smart-gym/shared';
-import { getProfile, signInWithEmail } from '@smart-gym/supabase';
+import { getProfile, signInWithEmail, signOut } from '@smart-gym/supabase';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,14 @@ export function LoginForm() {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+
+  // Clear any leftover session so Login always asks for credentials.
+  useEffect(() => {
+    const supabase = createClient();
+    void signOut(supabase).catch(() => {
+      /* ignore — form still works if already signed out */
+    });
+  }, []);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
