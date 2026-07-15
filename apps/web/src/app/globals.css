@@ -148,7 +148,8 @@
 
 /* Legacy-inspired dashboard surfaces */
 @layer components {
-  .sg-panel {
+  .sg-panel,
+  .sg-info-card {
     @apply rounded-[20px] border p-5 sm:p-6;
     border-color: rgba(99, 102, 241, 0.12);
     background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(249, 252, 255, 0.84));
@@ -156,17 +157,15 @@
     transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .sg-panel:hover {
+  .sg-panel:hover,
+  .sg-info-card:hover {
     border-color: rgba(79, 70, 229, 0.24);
   }
 
-  .dark .sg-panel {
+  .dark .sg-panel,
+  .dark .sg-info-card {
     border-color: rgba(129, 140, 248, 0.18);
     background: linear-gradient(160deg, rgba(17, 27, 55, 0.95), rgba(15, 23, 42, 0.88));
-  }
-
-  .sg-info-card {
-    @apply sg-panel;
   }
 
   .sg-tag {
