@@ -1,65 +1,33 @@
-'use client';
-
-import { motion } from 'framer-motion';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { LANDING_FEATURES } from '@/features/marketing/constants';
-
-const container = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 },
-  },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0 },
-};
 
 export function FeaturesSection() {
   return (
-    <section className="border-t border-border/60 bg-muted/20 px-4 py-16 sm:px-6 sm:py-24">
+    <section className="border-t border-border px-4 py-12 sm:px-6 sm:py-16">
       <div className="mx-auto max-w-6xl">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">All features</h2>
-          <p className="mt-4 text-muted-foreground">
-            Everything your gym needs — from check-ins to global leaderboards — in one platform.
+        <div className="max-w-2xl">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Features</h2>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Attendance, members, payments, diet, and communication in one place.
           </p>
         </div>
 
-        <motion.div
-          className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-          variants={container}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-        >
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {LANDING_FEATURES.map((feature) => {
             const Icon = feature.icon;
             return (
-              <motion.div key={feature.title} variants={item}>
-                <Card className="h-full border-border/60 bg-card/80 transition-shadow hover:shadow-md">
-                  <CardHeader>
-                    <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="size-5" aria-hidden />
-                    </div>
-                    <CardTitle className="text-base">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription>{feature.description}</CardDescription>
-                  </CardContent>
-                </Card>
-              </motion.div>
+              <article
+                key={feature.title}
+                className="rounded-xl border border-border bg-card p-4"
+              >
+                <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-muted text-foreground">
+                  <Icon className="size-4" aria-hidden />
+                </div>
+                <h3 className="font-semibold">{feature.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{feature.description}</p>
+              </article>
             );
           })}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

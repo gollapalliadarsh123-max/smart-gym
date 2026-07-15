@@ -21,34 +21,17 @@ import {
 } from '@smart-gym/supabase';
 import { useMemberContext } from '@/features/member/components/member-provider';
 import { CrowdMeter } from '@/features/attendance/components/crowd-meter';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { SectionCard } from '@/components/layout/section-card';
+import { StatCard } from '@/components/layout/stat-card';
+import { StatusBadge, statusToneFromLabel } from '@/components/layout/status-badge';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-function InfoCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="sg-info-card">
-      <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </span>
-      <h2 className="mt-2 text-2xl font-extrabold tracking-tight">{value}</h2>
-      {hint ? <p className="mt-1 text-sm text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
-}
-
 function planLabel(plan: string | null | undefined) {
   if (!plan) return '—';
-  if (plan in MEMBERSHIP_PLAN_LABELS) {
-    return MEMBERSHIP_PLAN_LABELS[plan as MembershipPlan];
-  }
+  if (plan in MEMBERSHIP_PLAN_LABELS) return MEMBERSHIP_PLAN_LABELS[plan as MembershipPlan];
   return plan.replace(/_/g, ' ');
 }
 
@@ -93,16 +76,11 @@ export function MemberHome() {
   const streakBest = Math.max(streakQuery.data?.best_meal_log_streak ?? 0, streakCurrent);
   const latestPayment = (paymentsQuery.data ?? [])[0];
   const paymentStatus = latestPayment?.status
-    ? latestPayment.status.charAt(0).toUpperCase() + latestPayment.status.slice(1)
+    ? latestPayment.status.replace(/_/g, ' ')
     : membership?.status === 'active'
-      ? 'Active'
+      ? 'active'
       : '—';
-  const membershipStatus =
-    membership?.status === 'active'
-      ? 'Active'
-      : membership?.status
-        ? membership.status.charAt(0).toUpperCase() + membership.status.slice(1)
-        : '—';
+  const membershipStatus = membership?.status ?? '—';
 
   const liveCount = countLiveMembers(
     (gymTodayQuery.data ?? []).map((row) => ({
@@ -114,112 +92,85 @@ export function MemberHome() {
   const crowdLevel = calculateCrowdLevel(liveCount, (activeMembersQuery.data ?? []).length);
 
   return (
-    <div className="space-y-6">
-      <div className="sg-panel">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-extrabold">What should I do next?</h3>
-          <span className="sg-tag">Quick start</span>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          1) Mark attendance with today&apos;s code. 2) Log your meals in Diet. 3) Check your
-          position on the Leaderboard.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/member/attendance" className={cn(buttonVariants({ variant: 'outline' }))}>
-            Go to Attendance
-          </Link>
-          <Link href="/member/diet" className={cn(buttonVariants({ variant: 'outline' }))}>
-            Go to Diet
-          </Link>
-          <Link href="/member/league" className={cn(buttonVariants())}>
-            Open Leaderboard
-          </Link>
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={`Hi${profile?.first_name ? `, ${profile.first_name}` : ''}`}
+        description={`${gym?.name ?? 'Your gym'}${membership?.ends_at ? ` · ${getMembershipExpiryLine(membership.ends_at)}` : ''}`}
+        actions={
+          <>
+            <Link href="/member/attendance" className={cn(buttonVariants({ size: 'lg' }), 'min-h-11')}>
+              Attendance
+            </Link>
+            <Link
+              href="/member/diet"
+              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'min-h-11')}
+            >
+              Log diet
+            </Link>
+          </>
+        }
+      />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <InfoCard
-            label="Membership Status"
-            value={membershipStatus}
-            hint={
-              membership?.ends_at ? getMembershipExpiryLine(membership.ends_at) : undefined
-            }
-          />
-          <InfoCard label="Payment Status" value={paymentStatus} />
-          <InfoCard label="Plan" value={planLabel(membership?.plan)} />
-          <InfoCard
-            label="Your gym"
-            value={gym?.name ?? '—'}
-            hint={gym?.code ? `Code ${gym.code}` : undefined}
-          />
-        </div>
-
-        <div className="sg-panel flex shrink-0 flex-col items-center justify-center px-6 py-5 lg:w-[160px]">
-          <span className="mb-3 text-xs font-bold tracking-wide text-muted-foreground uppercase">
-            Fitness Score
-          </span>
-          <div
-            className="sg-fitness-ring"
-            style={{ ['--score-deg' as string]: `${Math.min(100, fitnessScore) * 3.6}deg` }}
-          >
-            <div className="sg-fitness-core">{fitnessScore}</div>
-          </div>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Hi{profile?.first_name ? `, ${profile.first_name}` : ''}
-          </p>
-        </div>
-      </div>
-
-      <div className="sg-panel">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-extrabold">Diet streak</h3>
-          <span className="sg-tag">
-            {streakCurrent > 0 ? `${streakCurrent} day streak` : 'Start today'}
-          </span>
-        </div>
-        <p className="text-2xl font-extrabold">
-          {streakCurrent} day{streakCurrent === 1 ? '' : 's'} in a row
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Best: {streakBest > 0 ? `${streakBest} days` : '—'}
-        </p>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Log meals every day to build a streak.
-        </p>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Membership"
+          value={
+            <StatusBadge tone={statusToneFromLabel(String(membershipStatus))}>
+              {String(membershipStatus)}
+            </StatusBadge>
+          }
+          hint={membership?.ends_at ? getMembershipExpiryLine(membership.ends_at) : undefined}
+        />
+        <StatCard
+          label="Payment"
+          value={
+            <StatusBadge tone={statusToneFromLabel(paymentStatus)}>{paymentStatus}</StatusBadge>
+          }
+        />
+        <StatCard label="Plan" value={planLabel(membership?.plan)} />
+        <StatCard label="Fitness score" value={fitnessScore} hint={`Streak ${streakCurrent} · best ${streakBest}`} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="sg-panel">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-extrabold">Today&apos;s Attendance Code</h3>
-            <span className="sg-tag">Daily Code</span>
-          </div>
-          <div className="sg-code-box">
-            <div className="sg-code-value">
-              {codeQuery.isLoading ? '····' : codeQuery.data || '————'}
-            </div>
-          </div>
+        <SectionCard title="Today’s attendance code" description="Show this at the desk">
+          <p className="rounded-lg border border-border bg-muted/40 py-6 text-center font-mono text-3xl font-semibold tracking-[0.35em] text-primary sm:text-4xl">
+            {codeQuery.isLoading ? '····' : codeQuery.data || '————'}
+          </p>
           <p className="mt-3 text-sm text-muted-foreground">
             {codeQuery.data
-              ? 'Show this code at the desk to mark attendance.'
-              : 'Loading attendance code…'}
+              ? 'Valid for today only.'
+              : 'Code will appear when your gym is available.'}
           </p>
-        </div>
+        </SectionCard>
 
-        <div className="sg-panel">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-extrabold">Current Crowd</h3>
-            <span className="sg-tag">Live</span>
-          </div>
+        <SectionCard title="Gym crowd" description={`${gym?.name ?? 'Gym'} right now`}>
           <CrowdMeter
             compact
             level={crowdLevel}
             liveCount={liveCount}
             activeCount={(activeMembersQuery.data ?? []).length}
           />
-        </div>
+        </SectionCard>
       </div>
-    </div>
+
+      <SectionCard title="Quick links">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { href: '/member/payments', label: 'Payments' },
+            { href: '/member/league', label: 'League' },
+            { href: '/member/friends', label: 'Friends' },
+            { href: '/member/notifications', label: 'Alerts' },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'min-h-11 justify-start')}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </SectionCard>
+    </PageContainer>
   );
 }

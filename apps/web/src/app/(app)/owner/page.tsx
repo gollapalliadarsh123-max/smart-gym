@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
-import { OwnerLegacyDashboard } from '@/features/legacy-ui/owner-legacy-dashboard';
+import { OwnerOverview } from '@/features/owner/components/owner-overview';
 
-export const metadata: Metadata = {
-  title: 'Owner dashboard',
-};
+export const metadata: Metadata = { title: 'Owner dashboard' };
 
 export default function OwnerPage() {
-  return <OwnerLegacyDashboard />;
+  return <OwnerOverview />;
 }

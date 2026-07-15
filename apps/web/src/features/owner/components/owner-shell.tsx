@@ -1,7 +1,15 @@
 'use client';
 
+import {
+  Bell,
+  CreditCard,
+  Dumbbell,
+  Home,
+  Settings,
+  Users,
+} from 'lucide-react';
 import { usePendingJoinRequests } from '@smart-gym/supabase';
-import { DashboardShell } from '@/features/dashboard/components/dashboard-shell';
+import { AppShell } from '@/components/layout/app-shell';
 import { useOwnerContext } from '@/features/owner/components/owner-provider';
 import type { ReactNode } from 'react';
 
@@ -10,22 +18,26 @@ export function OwnerShell({ children }: { children: ReactNode }) {
   const pendingQuery = usePendingJoinRequests(client, gym?.id);
   const pendingCount = pendingQuery.data?.length ?? 0;
 
-  const nav = [
-    { href: '/owner', label: 'Dashboard', exact: true as const },
-    { href: '/owner/members', label: 'Members', badge: pendingCount },
-    { href: '/owner/attendance', label: 'Attendance' },
-    { href: '/owner/payments', label: 'Payments' },
-    { href: '/owner/broadcast', label: 'Notifications' },
-    { href: '/owner/settings', label: 'Settings' },
-  ];
-
   return (
-    <DashboardShell
+    <AppShell
       title={gym?.name ?? 'Owner'}
       subtitle={gym?.code ? `Code ${gym.code}` : 'Smart Gym'}
-      nav={nav}
+      nav={[
+        { href: '/owner', label: 'Home', icon: Home, exact: true, primary: true },
+        {
+          href: '/owner/members',
+          label: 'Members',
+          icon: Users,
+          badge: pendingCount,
+          primary: true,
+        },
+        { href: '/owner/attendance', label: 'Attendance', icon: Dumbbell, primary: true },
+        { href: '/owner/payments', label: 'Payments', icon: CreditCard, primary: true },
+        { href: '/owner/broadcast', label: 'Broadcast', icon: Bell },
+        { href: '/owner/settings', label: 'Settings', icon: Settings },
+      ]}
     >
       {children}
-    </DashboardShell>
+    </AppShell>
   );
 }

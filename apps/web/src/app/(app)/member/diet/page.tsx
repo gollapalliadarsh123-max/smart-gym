@@ -1,5 +1,13 @@
-import { redirect } from 'next/navigation';
+import type { Metadata } from 'next';
+import { MemberDietPanel } from '@/features/member/components/member-diet-panel';
+import { PageContainer } from '@/components/layout/page-container';
 
-export default function MemberSubpageRedirect() {
-  redirect('/member');
+export const metadata: Metadata = { title: 'Diet' };
+
+export default function Page() {
+  return (
+    <PageContainer>
+      <MemberDietPanel />
+    </PageContainer>
+  );
 }

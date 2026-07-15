@@ -1,18 +1,17 @@
 'use client';
 
-import { DashboardShell } from '@/features/dashboard/components/dashboard-shell';
+import {
+  Bell,
+  CreditCard,
+  Dumbbell,
+  Home,
+  Trophy,
+  Users,
+  Utensils,
+} from 'lucide-react';
+import { AppShell } from '@/components/layout/app-shell';
 import { useMemberContext } from '@/features/member/components/member-provider';
 import type { ReactNode } from 'react';
-
-const NAV = [
-  { href: '/member', label: 'Dashboard', exact: true },
-  { href: '/member/notifications', label: 'Notifications' },
-  { href: '/member/attendance', label: 'Attendance' },
-  { href: '/member/payments', label: 'Payments' },
-  { href: '/member/diet', label: 'Diet', icon: '✦' },
-  { href: '/member/league', label: 'Leaderboard', icon: '✦' },
-  { href: '/member/friends', label: 'Friends & Chat', icon: '✦' },
-];
 
 export function MemberShell({ children }: { children: ReactNode }) {
   const { profile, gym } = useMemberContext();
@@ -22,12 +21,20 @@ export function MemberShell({ children }: { children: ReactNode }) {
     'Member';
 
   return (
-    <DashboardShell
+    <AppShell
       title={name}
-      subtitle={gym?.code ? `GYM ${gym.code}` : 'Smart Gym'}
-      nav={NAV}
+      subtitle={gym?.name ?? gym?.code ?? 'Smart Gym'}
+      nav={[
+        { href: '/member', label: 'Home', icon: Home, exact: true, primary: true },
+        { href: '/member/attendance', label: 'Attendance', icon: Dumbbell, primary: true },
+        { href: '/member/diet', label: 'Diet', icon: Utensils, primary: true },
+        { href: '/member/payments', label: 'Payments', icon: CreditCard, primary: true },
+        { href: '/member/league', label: 'League', icon: Trophy },
+        { href: '/member/friends', label: 'Friends', icon: Users, primary: true },
+        { href: '/member/notifications', label: 'Alerts', icon: Bell },
+      ]}
     >
       {children}
-    </DashboardShell>
+    </AppShell>
   );
 }

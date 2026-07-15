@@ -19,20 +19,14 @@ import {
 } from '@smart-gym/supabase';
 import { useOwnerContext } from '@/features/owner/components/owner-provider';
 import { CrowdMeter } from '@/features/attendance/components/crowd-meter';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { SectionCard } from '@/components/layout/section-card';
+import { StatCard } from '@/components/layout/stat-card';
+import { EmptyState } from '@/components/layout/feedback-states';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-
-function InfoCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="sg-info-card">
-      <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </span>
-      <h2 className="mt-2 text-3xl font-extrabold tracking-tight">{value}</h2>
-    </div>
-  );
-}
 
 function profileLabel(
   profile: { full_name?: string; first_name?: string; last_name?: string; email?: string } | undefined,
@@ -63,9 +57,8 @@ export function OwnerOverview() {
 
   const members = membersQuery.data ?? [];
   const active = members.filter((m) => m.status === 'active');
-  const pending = pendingQuery.data ?? [];
-  const payments = paymentsQuery.data ?? [];
-  const monthlyRevenue = sumPaidInMonth(payments);
+  const pending = useMemo(() => pendingQuery.data ?? [], [pendingQuery.data]);
+  const monthlyRevenue = sumPaidInMonth(paymentsQuery.data ?? []);
   const todayRows = todayQuery.data ?? [];
 
   const pendingIds = useMemo(() => pending.map((p) => p.user_id), [pending]);
@@ -115,11 +108,10 @@ export function OwnerOverview() {
   async function copyCheckInLink() {
     if (!checkInUrl) return;
     try {
-      await navigator.clipboard.writeText(
-        checkInUrl.startsWith('http')
-          ? checkInUrl
-          : `${window.location.origin}${checkInUrl}`,
-      );
+      const absolute = checkInUrl.startsWith('http')
+        ? checkInUrl
+        : `${window.location.origin}${checkInUrl}`;
+      await navigator.clipboard.writeText(absolute);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -128,66 +120,54 @@ export function OwnerOverview() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="sg-panel overflow-hidden !p-0">
-        <div className="bg-gradient-to-r from-indigo-600 to-sky-500 px-6 py-7 text-white">
-          <h1 className="text-3xl font-extrabold tracking-tight">Admin Dashboard</h1>
-          <p className="mt-1 text-sm text-indigo-50">
-            Track members, payments, attendance, live crowd, and notifications
-            {gym?.name ? ` · ${gym.name}` : ''}.
-          </p>
-        </div>
+    <PageContainer>
+      <PageHeader
+        title={gym?.name ?? 'Owner dashboard'}
+        description="Members, attendance, payments, and requests in one place."
+        actions={
+          <>
+            <Link href="/owner/members" className={cn(buttonVariants({ size: 'lg' }), 'min-h-11')}>
+              Members
+            </Link>
+            <Link
+              href="/owner/payments"
+              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'min-h-11')}
+            >
+              Record payment
+            </Link>
+          </>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active members" value={active.length} hint={`${members.length} total`} />
+        <StatCard label="Today’s attendance" value={todayRows.length} />
+        <StatCard label="Monthly income" value={`₹${monthlyRevenue.toFixed(0)}`} />
+        <StatCard
+          label="Pending requests"
+          value={pending.length}
+          hint={pending.length ? 'Needs review' : 'All clear'}
+        />
       </div>
 
-      <div className="sg-panel">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-extrabold">What should I do next?</h3>
-          <span className="sg-tag">Quick start</span>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          1) Approve pending members. 2) Mark attendance. 3) Review payments before closing the day.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/owner/members" className={cn(buttonVariants({ variant: 'outline' }))}>
-            Open Members
-          </Link>
-          <Link href="/owner/attendance" className={cn(buttonVariants({ variant: 'outline' }))}>
-            Open Attendance
-          </Link>
-          <Link href="/owner/payments" className={cn(buttonVariants())}>
-            Open Payments
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <InfoCard label="Total Members" value={members.length} />
-        <InfoCard label="Active Members" value={active.length} />
-        <InfoCard label="Monthly Revenue" value={`₹${monthlyRevenue.toFixed(0)}`} />
-        <InfoCard label="Pending Requests" value={pending.length} />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <div className="sg-panel">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-extrabold">Mark Attendance</h3>
-            <span className="sg-tag">4-Digit Code</span>
-          </div>
-          <form onSubmit={(e) => void handleMark(e)} className="flex flex-wrap gap-2">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard title="Mark attendance" description="Enter a member’s 4-digit code">
+          <form onSubmit={(e) => void handleMark(e)} className="flex flex-col gap-3 sm:flex-row">
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              placeholder="Enter 4-digit code"
+              placeholder="4-digit code"
               maxLength={4}
-              className="max-w-[180px] font-mono text-lg tracking-widest"
+              className="min-h-11 font-mono text-lg tracking-widest sm:max-w-[160px]"
               inputMode="numeric"
+              aria-label="Attendance code"
             />
-            <Button type="submit" disabled={mark.isPending || !gymId}>
-              {mark.isPending ? 'Marking…' : 'Mark Attendance'}
+            <Button type="submit" className="min-h-11" disabled={mark.isPending || !gymId}>
+              {mark.isPending ? 'Marking…' : 'Mark'}
             </Button>
           </form>
           {message ? (
-            <p className="mt-3 text-sm text-emerald-600" role="status">
+            <p className="mt-3 text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">
               {message}
             </p>
           ) : null}
@@ -196,89 +176,56 @@ export function OwnerOverview() {
               {error}
             </p>
           ) : null}
-        </div>
+        </SectionCard>
 
-        <div className="sg-panel">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-extrabold">QR self check-in</h3>
-            <span className="sg-tag">Members scan</span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Share this link or display it at the desk. Members open it while logged in to check in
-            for today.
-          </p>
-          <Input className="mt-3 font-mono text-xs" readOnly value={checkInUrl || '—'} />
+        <SectionCard title="Self check-in link" description="Share with members at the desk">
+          <Input className="min-h-11 font-mono text-xs" readOnly value={checkInUrl || '—'} aria-label="Check-in URL" />
           <Button
             type="button"
             variant="outline"
-            className="mt-3"
+            className="mt-3 min-h-11"
             disabled={!gymId}
             onClick={() => void copyCheckInLink()}
           >
-            {copied ? 'Copied' : 'Copy check-in link'}
+            {copied ? 'Copied' : 'Copy link'}
           </Button>
-        </div>
-
-        <div className="sg-panel lg:col-span-2 xl:col-span-1">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-extrabold">Live Crowd</h3>
-            <span className="sg-tag">Live</span>
-          </div>
-          <div className="mb-4 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-border/60 bg-white/50 p-3 dark:bg-white/5">
-              <p className="text-xs font-bold text-muted-foreground uppercase">Live Crowd</p>
-              <p className="mt-1 text-2xl font-extrabold">{liveCount}</p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-white/50 p-3 dark:bg-white/5">
-              <p className="text-xs font-bold text-muted-foreground uppercase">Crowd Level</p>
-              <p className="mt-1 text-2xl font-extrabold">{crowdLevel} / 5</p>
-            </div>
-          </div>
-          <CrowdMeter
-            compact
-            level={crowdLevel}
-            liveCount={liveCount}
-            activeCount={(activeMembersQuery.data ?? []).length}
-          />
-        </div>
+        </SectionCard>
       </div>
 
-      {pending.length > 0 ? (
-        <div className="sg-panel">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-extrabold">Pending join requests</h3>
-            <Link href="/owner/members" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
-              Review all
-            </Link>
-          </div>
-          <ul className="space-y-2 text-sm">
+      <SectionCard title="Live crowd">
+        <div className="mb-4 grid grid-cols-2 gap-3">
+          <StatCard label="Live now" value={liveCount} />
+          <StatCard label="Level" value={`${crowdLevel} / 5`} />
+        </div>
+        <CrowdMeter
+          compact
+          level={crowdLevel}
+          liveCount={liveCount}
+          activeCount={(activeMembersQuery.data ?? []).length}
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Pending join requests"
+        action={
+          <Link href="/owner/members" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
+            Review all
+          </Link>
+        }
+      >
+        {pending.length === 0 ? (
+          <EmptyState title="No pending requests" description="New join requests will show up here." />
+        ) : (
+          <ul className="divide-y divide-border">
             {pending.slice(0, 5).map((req) => (
-              <li
-                key={req.id}
-                className="flex justify-between gap-4 border-b border-border/40 py-2 last:border-0"
-              >
-                <span className="font-semibold">
-                  {profileLabel(profiles[req.user_id], req.user_id)}
-                </span>
-                <span className="text-muted-foreground">{req.message || 'No message'}</span>
+              <li key={req.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-medium">{profileLabel(profiles[req.user_id], req.user_id)}</span>
+                <span className="text-sm text-muted-foreground">{req.message || 'No message'}</span>
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
-
-      <div className="sg-panel">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-extrabold">Send notification</h3>
-          <span className="sg-tag">Broadcast</span>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Announce updates to all members from the Notifications page.
-        </p>
-        <Link href="/owner/broadcast" className={cn(buttonVariants(), 'mt-4 inline-flex')}>
-          Open broadcast
-        </Link>
-      </div>
-    </div>
+        )}
+      </SectionCard>
+    </PageContainer>
   );
 }
