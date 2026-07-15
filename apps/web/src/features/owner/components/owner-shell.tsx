@@ -1,12 +1,12 @@
 'use client';
 
 import {
-  Bell,
-  CreditCard,
-  Dumbbell,
-  Home,
-  Settings,
+  ClipboardCheck,
+  LayoutDashboard,
+  Megaphone,
+  Settings2,
   Users,
+  Wallet,
 } from 'lucide-react';
 import { usePendingJoinRequests } from '@smart-gym/supabase';
 import { AppShell } from '@/components/layout/app-shell';
@@ -20,10 +20,11 @@ export function OwnerShell({ children }: { children: ReactNode }) {
 
   return (
     <AppShell
+      variant="owner"
       title={gym?.name ?? 'Owner'}
       subtitle={gym?.code ? `Code ${gym.code}` : 'Smart Gym'}
       nav={[
-        { href: '/owner', label: 'Home', icon: Home, exact: true, primary: true },
+        { href: '/owner', label: 'Home', icon: LayoutDashboard, exact: true, primary: true },
         {
           href: '/owner/members',
           label: 'Members',
@@ -31,10 +32,10 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           badge: pendingCount,
           primary: true,
         },
-        { href: '/owner/attendance', label: 'Attendance', icon: Dumbbell, primary: true },
-        { href: '/owner/payments', label: 'Payments', icon: CreditCard, primary: true },
-        { href: '/owner/broadcast', label: 'Broadcast', icon: Bell },
-        { href: '/owner/settings', label: 'Settings', icon: Settings },
+        { href: '/owner/attendance', label: 'Attendance', icon: ClipboardCheck, primary: true },
+        { href: '/owner/payments', label: 'Payments', icon: Wallet, primary: true },
+        { href: '/owner/broadcast', label: 'Broadcast', icon: Megaphone },
+        { href: '/owner/settings', label: 'Settings', icon: Settings2 },
       ]}
     >
       {children}
