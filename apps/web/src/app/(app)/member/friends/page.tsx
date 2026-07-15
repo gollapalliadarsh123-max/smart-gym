@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Friends' };
 
 export default function Page() {
   return (
-    <PageContainer>
+    <PageContainer className="max-w-[1400px]">
       <MemberSocialPanel />
     </PageContainer>
   );
