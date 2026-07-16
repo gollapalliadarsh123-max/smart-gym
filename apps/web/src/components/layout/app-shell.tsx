@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { Menu, X, type LucideIcon } from 'lucide-react';
 import { APP_NAME } from '@smart-gym/shared';
@@ -36,6 +36,7 @@ export function AppShell({
   variant?: 'default' | 'owner';
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const isOwner = variant === 'owner';
 
@@ -43,6 +44,13 @@ export function AppShell({
     return item.exact
       ? pathname === item.href
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
+  }
+
+  /** Mobile tab switches replace history so Back asks logout instead of hopping pages. */
+  function goNav(href: string) {
+    setOpen(false);
+    if (pathname === href) return;
+    router.replace(href);
   }
 
   const bottomItems = nav.filter((item) => item.primary).slice(0, 5);
@@ -56,7 +64,15 @@ export function AppShell({
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => setOpen(false)}
+            onClick={(e) => {
+              // Drawer is mobile-only; replace so Back never walks the stack.
+              if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+                e.preventDefault();
+                goNav(item.href);
+                return;
+              }
+              setOpen(false);
+            }}
             className={cn(
               'group relative inline-flex min-h-11 items-center gap-3 text-sm font-medium transition-colors',
               isOwner
@@ -252,10 +268,11 @@ export function AppShell({
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>
-                    <Link
-                      href={item.href}
+                    <button
+                      type="button"
+                      onClick={() => goNav(item.href)}
                       className={cn(
-                        'flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[11px] font-medium',
+                        'flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[11px] font-medium',
                         isOwner
                           ? active
                             ? 'text-emerald-700 dark:text-emerald-400'
@@ -268,7 +285,7 @@ export function AppShell({
                     >
                       <Icon className="size-5" aria-hidden />
                       <span className="truncate">{item.label}</span>
-                    </Link>
+                    </button>
                   </li>
                 );
               })}

@@ -809,7 +809,7 @@ function MemberDietEditor({
 
   return (
     <motion.div
-      className="mx-auto w-full max-w-6xl space-y-6 pb-24 sm:space-y-8 lg:pb-8"
+      className="mx-auto w-full max-w-6xl space-y-6 pb-8 sm:space-y-8"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
@@ -1632,19 +1632,6 @@ function MemberDietEditor({
             Added ✓
           </motion.span>
         ) : null}
-      </div>
-
-      {/* Sticky mobile add */}
-      <div className="fixed inset-x-0 bottom-16 z-20 border-t border-border/80 bg-background/90 p-3 backdrop-blur lg:hidden">
-        <Button
-          className="min-h-12 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-          onClick={() => {
-            document.getElementById('add-food')?.scrollIntoView({ behavior: 'smooth' });
-          }}
-        >
-          <Plus className="size-4" />
-          Add Food
-        </Button>
       </div>
 
       {/* Grams bottom sheet / modal — select food never adds until Add Food */}

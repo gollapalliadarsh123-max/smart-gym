@@ -8,8 +8,9 @@ import { createClient } from '@/lib/supabase/client';
 const GUARD = { smartGymLogoutGuard: true } as const;
 
 /**
- * While logged in, every browser Back press asks whether to log out.
- * Cancel keeps you on the current page; OK signs out and goes to /login.
+ * While logged in, every browser / phone Back press asks whether to log out.
+ * In-app tab switches should use history.replace so Back never hops between pages.
+ * Cancel stays on the current page; OK signs out and goes to /login.
  */
 export function LogoutOnBackGuard() {
   const router = useRouter();
@@ -17,9 +18,10 @@ export function LogoutOnBackGuard() {
   const stayHref = useRef('');
   const busy = useRef(false);
 
-  // Track the page the user is on so Cancel can restore it after Back.
   useEffect(() => {
     stayHref.current = window.location.href;
+    // Replace current entry, then push a trap so the next Back is always ours.
+    window.history.replaceState(GUARD, '', stayHref.current);
     window.history.pushState(GUARD, '', stayHref.current);
   }, [pathname]);
 
@@ -29,7 +31,6 @@ export function LogoutOnBackGuard() {
       busy.current = true;
 
       const restore = stayHref.current || window.location.href;
-      // Re-lock immediately so Back never leaves the app silently.
       window.history.pushState(GUARD, '', restore);
 
       let path = pathname;
