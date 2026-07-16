@@ -1,5 +1,5 @@
 export { queryKeys } from './query-keys';
-export { useProfile } from './use-profile';
+export { useProfile, useUpdateProfile } from './use-profile';
 export { useGym, useGymByCode } from './use-gym';
 export { useActiveMembership, usePendingJoinRequests } from './use-membership';
 export {

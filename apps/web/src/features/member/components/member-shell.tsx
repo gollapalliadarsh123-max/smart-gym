@@ -5,6 +5,7 @@ import {
   CreditCard,
   Dumbbell,
   Home,
+  Settings,
   Trophy,
   Users,
   Utensils,
@@ -29,9 +30,10 @@ export function MemberShell({ children }: { children: ReactNode }) {
         { href: '/member/attendance', label: 'Attendance', icon: Dumbbell, primary: true },
         { href: '/member/diet', label: 'Diet', icon: Utensils, primary: true },
         { href: '/member/payments', label: 'Payments', icon: CreditCard, primary: true },
-        { href: '/member/league', label: 'League', icon: Trophy },
         { href: '/member/friends', label: 'Friends', icon: Users, primary: true },
+        { href: '/member/league', label: 'League', icon: Trophy },
         { href: '/member/notifications', label: 'Alerts', icon: Bell },
+        { href: '/member/settings', label: 'Profile', icon: Settings },
       ]}
     >
       {children}

@@ -1,8 +1,9 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TypedSupabaseClient } from '../client/browser';
-import { getProfile } from '../services/profiles';
+import { getProfile, updateProfile } from '../services/profiles';
+import type { TablesUpdate } from '../types/database';
 import { queryKeys } from './query-keys';
 
 export function useProfile(client: TypedSupabaseClient, userId: string | null | undefined) {
@@ -13,5 +14,17 @@ export function useProfile(client: TypedSupabaseClient, userId: string | null | 
       return getProfile(client, userId);
     },
     enabled: Boolean(userId),
+  });
+}
+
+export function useUpdateProfile(client: TypedSupabaseClient) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; patch: TablesUpdate<'profiles'> }) =>
+      updateProfile(client, input.userId, input.patch),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile(variables.userId) });
+      void queryClient.invalidateQueries({ queryKey: ['profiles-map'] });
+    },
   });
 }

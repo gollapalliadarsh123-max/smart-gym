@@ -310,17 +310,25 @@ export function MemberPaymentsPanel() {
     membership?.plan && membership.plan in MEMBERSHIP_PLAN_DAYS
       ? MEMBERSHIP_PLAN_DAYS[membership.plan as MembershipPlan]
       : 30;
+  const cycleDays = useMemo(() => {
+    if (!startsYmd || !endsYmd) return planDays;
+    const span = calculateDaysLeft(endsYmd, startsYmd);
+    return span != null && span > 0 ? span : planDays;
+  }, [startsYmd, endsYmd, planDays]);
+  // Remaining share of this cycle (full when just starting, empties near expiry)
   const renewalProgress =
     daysLeft == null
       ? 0
       : daysLeft < 0
         ? 0
-        : Math.min(100, Math.max(0, Math.round((daysLeft / planDays) * 100)));
+        : Math.min(100, Math.max(0, Math.round((daysLeft / Math.max(1, cycleDays)) * 100)));
 
   const membershipDurationDays = useMemo(() => {
     if (!startsYmd) return null;
     const daysFromStart = calculateDaysLeft(today, startsYmd);
-    return daysFromStart != null && daysFromStart >= 0 ? daysFromStart + 1 : null;
+    // Only count duration once membership has started
+    if (daysFromStart == null || daysFromStart < 0) return null;
+    return daysFromStart + 1;
   }, [startsYmd, today]);
 
   const estimatedRenewal = gymPriceForPlan(gym, membership?.plan as MembershipPlan | undefined);
@@ -341,13 +349,59 @@ export function MemberPaymentsPanel() {
     });
   }, [gym?.name, gym?.code, memberLabel, membershipId, endsYmd]);
 
-  const timelineProgress = useMemo(() => {
-    if (!startsYmd || !endsYmd) return 50;
+  const timeline = useMemo(() => {
+    if (!startsYmd || !endsYmd) {
+      return {
+        progress: 50,
+        showToday: true,
+        todayLeftPct: 50,
+        startedLabel: startsYmd ? formatYmd(startsYmd) : '—',
+        mergeTodayWithStart: false,
+        mergeTodayWithEnd: false,
+        beforeStart: false,
+      };
+    }
     const start = new Date(`${startsYmd}T00:00:00`).getTime();
     const end = new Date(`${endsYmd}T00:00:00`).getTime();
     const now = new Date(`${today}T00:00:00`).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 50;
-    return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return {
+        progress: 50,
+        showToday: true,
+        todayLeftPct: 50,
+        startedLabel: formatYmd(startsYmd),
+        mergeTodayWithStart: false,
+        mergeTodayWithEnd: false,
+        beforeStart: false,
+      };
+    }
+
+    const beforeStart = now < start;
+    const afterEnd = now > end;
+    const rawPct = ((now - start) / (end - start)) * 100;
+    // Keep markers away from the ends so labels never stack
+    const todayLeftPct = beforeStart
+      ? 0
+      : afterEnd
+        ? 100
+        : Math.min(88, Math.max(12, rawPct));
+
+    const mergeTodayWithStart = beforeStart || (!beforeStart && !afterEnd && rawPct < 8);
+    const mergeTodayWithEnd = afterEnd || (!beforeStart && !afterEnd && rawPct > 92);
+
+    return {
+      progress: Math.min(100, Math.max(0, beforeStart ? 0 : afterEnd ? 100 : rawPct)),
+      showToday: !mergeTodayWithStart && !mergeTodayWithEnd,
+      todayLeftPct,
+      startedLabel: mergeTodayWithStart
+        ? beforeStart
+          ? `Starts ${formatYmd(startsYmd)}`
+          : `${formatYmd(startsYmd)} · Today`
+        : formatYmd(startsYmd),
+      mergeTodayWithStart,
+      mergeTodayWithEnd,
+      beforeStart,
+    };
   }, [startsYmd, endsYmd, today]);
 
   const chartData = useMemo(() => {
@@ -590,9 +644,17 @@ export function MemberPaymentsPanel() {
             {
               label: 'Membership Duration',
               value:
-                membershipDurationDays != null ? `${membershipDurationDays} days` : '—',
+                membershipDurationDays != null
+                  ? `${membershipDurationDays} days`
+                  : startsYmd && (calculateDaysLeft(today, startsYmd) ?? 0) < 0
+                    ? 'Not started'
+                    : '—',
               icon: CalendarDays,
-              hint: startsYmd ? `Since ${formatYmd(startsYmd)}` : '—',
+              hint: startsYmd
+                ? membershipDurationDays != null
+                  ? `Since ${formatYmd(startsYmd)}`
+                  : `Starts ${formatYmd(startsYmd)}`
+                : '—',
             },
             {
               label: 'Next Renewal',
@@ -630,39 +692,65 @@ export function MemberPaymentsPanel() {
           <h2 className="text-base font-semibold tracking-tight">Membership Timeline</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">Where you are in this cycle</p>
 
-          <div className="relative mt-10 px-1 pb-2">
-            <div className="absolute top-3 right-3 left-3 h-1.5 rounded-full bg-muted" />
+          <div className="relative mt-10 px-2 pb-2">
+            <div className="absolute top-3 right-4 left-4 h-1.5 rounded-full bg-muted" />
             <motion.div
-              className="absolute top-3 left-3 h-1.5 rounded-full bg-emerald-500"
+              className="absolute top-3 left-4 h-1.5 rounded-full bg-emerald-500"
               initial={{ width: 0 }}
-              animate={{ width: `calc(${timelineProgress}% * 0.01 * (100% - 1.5rem))` }}
-              style={{ width: `calc((100% - 1.5rem) * ${timelineProgress / 100})` }}
+              animate={{
+                width: `calc((100% - 2rem) * ${timeline.progress / 100})`,
+              }}
               transition={{ duration: 0.8 }}
             />
-            <div className="relative h-20">
-              <div className="absolute top-0 left-0 flex w-16 -translate-x-0 flex-col items-start">
-                <span className="size-7 rounded-full border-4 border-background bg-slate-300 shadow dark:bg-slate-600" />
+            <div className="relative h-24">
+              {/* Started */}
+              <div className="absolute top-0 left-0 flex max-w-[34%] flex-col items-start">
+                <span
+                  className={cn(
+                    'size-7 rounded-full border-4 border-background shadow',
+                    timeline.mergeTodayWithStart
+                      ? 'bg-emerald-500'
+                      : 'bg-slate-300 dark:bg-slate-600',
+                  )}
+                />
                 <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Started
+                  {timeline.mergeTodayWithStart
+                    ? timeline.beforeStart
+                      ? 'Starts'
+                      : 'Started · Today'
+                    : 'Started'}
                 </p>
-                <p className="mt-1 text-sm font-medium">{formatYmd(startsYmd)}</p>
+                <p className="mt-1 text-sm font-medium leading-snug">{timeline.startedLabel}</p>
               </div>
-              <div
-                className="absolute top-0 flex w-20 -translate-x-1/2 flex-col items-center text-center"
-                style={{ left: `calc(0.75rem + (100% - 1.5rem) * ${timelineProgress / 100})` }}
-              >
-                <span className="size-7 rounded-full border-4 border-background bg-emerald-500 shadow" />
+
+              {/* Today — only when not stacked on start/end */}
+              {timeline.showToday ? (
+                <div
+                  className="absolute top-0 flex w-[28%] max-w-[7.5rem] -translate-x-1/2 flex-col items-center text-center"
+                  style={{ left: `calc(1rem + (100% - 2rem) * ${timeline.todayLeftPct / 100})` }}
+                >
+                  <span className="size-7 rounded-full border-4 border-background bg-emerald-500 shadow" />
+                  <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    Today
+                  </p>
+                  <p className="mt-1 text-sm font-medium leading-snug">{formatYmd(today)}</p>
+                </div>
+              ) : null}
+
+              {/* Renewal */}
+              <div className="absolute top-0 right-0 flex max-w-[34%] flex-col items-end text-right">
+                <span
+                  className={cn(
+                    'size-7 rounded-full border-4 border-background shadow',
+                    timeline.mergeTodayWithEnd
+                      ? 'bg-emerald-500'
+                      : 'bg-slate-300 dark:bg-slate-600',
+                  )}
+                />
                 <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Today
+                  {timeline.mergeTodayWithEnd ? 'Renewal · Today' : 'Renewal'}
                 </p>
-                <p className="mt-1 text-sm font-medium">{formatYmd(today)}</p>
-              </div>
-              <div className="absolute top-0 right-0 flex w-16 flex-col items-end text-right">
-                <span className="size-7 rounded-full border-4 border-background bg-slate-300 shadow dark:bg-slate-600" />
-                <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Renewal
-                </p>
-                <p className="mt-1 text-sm font-medium">{formatYmd(endsYmd)}</p>
+                <p className="mt-1 text-sm font-medium leading-snug">{formatYmd(endsYmd)}</p>
               </div>
             </div>
           </div>

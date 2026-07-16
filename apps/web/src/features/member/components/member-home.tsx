@@ -160,6 +160,7 @@ export function MemberHome() {
             { href: '/member/league', label: 'League' },
             { href: '/member/friends', label: 'Friends' },
             { href: '/member/notifications', label: 'Alerts' },
+            { href: '/member/settings', label: 'Profile settings' },
           ].map((item) => (
             <Link
               key={item.href}

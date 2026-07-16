@@ -35,6 +35,7 @@ export const NUTRITION_DB: Record<string, NutritionEntry> = {
     }
   },
   "chicken": {
+    "label": "Chicken Breast",
     "per100g": {
       "calories": 165,
       "protein": 31,
@@ -1898,19 +1899,19 @@ export function listPopularFoods(limit = 16): Array<{ key: string; label: string
     'egg',
     'chicken',
     'rice',
-    'dal',
-    'roti',
     'oats',
+    'roti',
     'banana',
     'milk',
     'paneer',
-    'curd',
+    'greek_yogurt',
     'whey_protein',
-    'almonds',
     'apple',
     'potato',
     'fish',
-    'spinach',
+    'broccoli',
+    'peanut_butter',
+    'tofu',
   ];
   return popular
     .filter((k) => NUTRITION_DB[k])
