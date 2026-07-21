@@ -329,7 +329,11 @@ export function MemberSettingsPanel() {
               <p className="mt-1 text-2xl font-semibold tracking-tight">{displayName}</p>
               <p className="mt-1 text-sm text-emerald-100/80">{profile?.email}</p>
               <p className="mt-2 text-xs text-emerald-100/70">
-                {membership?.status === 'active' ? 'Active membership' : membership?.status ?? 'Member'}
+                {membership?.status === 'active'
+                  ? 'Active membership'
+                  : membership?.status
+                    ? membership.status
+                    : 'Profile available before membership starts'}
                 {gym?.name ? ` · ${gym.name}` : ''}
               </p>
             </div>

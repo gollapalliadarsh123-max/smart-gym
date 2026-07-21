@@ -21,6 +21,7 @@ import {
   Mail,
   Moon,
   Phone,
+  ScanLine,
   Sparkles,
   Sunrise,
   Trophy,
@@ -43,9 +44,12 @@ import {
   useMemberAttendanceHistory,
   useMemberAttendanceToday,
   useSelfCheckIn,
+  useCheckInByQrToken,
   type Tables,
+  type QrCheckInResult,
 } from '@smart-gym/supabase';
 import { useMemberContext } from '@/features/member/components/member-provider';
+import { GymQrScanner } from '@/features/attendance/components/gym-qr-scanner';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -211,6 +215,8 @@ export function MemberAttendancePanel() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [successPulse, setSuccessPulse] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanResult, setScanResult] = useState<QrCheckInResult | null>(null);
 
   const codeQuery = useDailyAttendanceCode(client, gymId, Boolean(gymId));
   const myTodayQuery = useMemberAttendanceToday(client, userId, today);
@@ -218,6 +224,7 @@ export function MemberAttendancePanel() {
   const gymTodayQuery = useGymAttendanceToday(client, gymId, today);
   const activeMembersQuery = useGymMembers(client, gymId, 'active');
   const selfCheckIn = useSelfCheckIn(client);
+  const qrCheckIn = useCheckInByQrToken(client);
 
   const history = historyQuery.data ?? [];
   const checkedIn = Boolean(myTodayQuery.data);
@@ -353,6 +360,28 @@ export function MemberAttendancePanel() {
       await historyQuery.refetch();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Self check-in failed.');
+    }
+  }
+
+  async function handleQrToken(token: string) {
+    setError(null);
+    setStatus(null);
+    setScanResult(null);
+    try {
+      const result = await qrCheckIn.mutateAsync(token);
+      setScanResult(result);
+      if (result.success) {
+        setStatus(result.message);
+        setSuccessPulse(true);
+        window.setTimeout(() => setSuccessPulse(false), 1800);
+        await myTodayQuery.refetch();
+        await gymTodayQuery.refetch();
+        await historyQuery.refetch();
+      } else {
+        setError(result.message + (result.detail ? ` — ${result.detail}` : ''));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'QR check-in failed.');
     }
   }
 
@@ -531,6 +560,15 @@ export function MemberAttendancePanel() {
                   ? 'Checking in…'
                   : 'Self check-in'}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-2 min-h-12 w-full rounded-2xl"
+              onClick={() => setScannerOpen((v) => !v)}
+            >
+              <ScanLine className="size-4" />
+              {scannerOpen ? 'Hide QR scanner' : 'Scan Gym QR'}
+            </Button>
             {status ? (
               <p className="mt-3 text-sm font-medium text-emerald-600 dark:text-emerald-400" role="status">
                 {status}
@@ -542,6 +580,37 @@ export function MemberAttendancePanel() {
               </p>
             ) : null}
           </GlassCard>
+
+          <AnimatePresence>
+            {scannerOpen ? (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+              >
+                <GlassCard className="p-5 sm:p-6">
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-semibold tracking-tight">Scan Gym QR</h2>
+                      <p className="mt-0.5 text-sm text-muted-foreground">
+                        Works for your home gym and active partner gyms
+                      </p>
+                    </div>
+                  </div>
+                  <GymQrScanner
+                    disabled={qrCheckIn.isPending}
+                    onToken={(token) => void handleQrToken(token)}
+                  />
+                  {scanResult?.success && scanResult.check_in_kind === 'partner' ? (
+                    <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">
+                      Remaining visits: {scanResult.visits_remaining ?? 0} /{' '}
+                      {scanResult.monthly_limit ?? 3}
+                    </p>
+                  ) : null}
+                </GlassCard>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
           <GlassCard className="p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">

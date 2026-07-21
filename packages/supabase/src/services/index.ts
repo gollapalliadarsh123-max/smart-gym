@@ -10,3 +10,5 @@ export * from './league';
 export * from './notifications';
 export * from './social';
 export * from './registration';
+export * from './partnerships';
+export * from './gym-qr';

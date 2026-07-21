@@ -663,6 +663,228 @@ export type Database = {
         };
         Relationships: [];
       };
+      gym_partnerships: {
+        Row: {
+          id: string;
+          requesting_gym_id: string;
+          partner_gym_id: string;
+          status: Database['public']['Enums']['gym_partnership_status'];
+          monthly_visit_limit: number;
+          requested_by: string;
+          approved_by: string | null;
+          created_at: string;
+          approved_at: string | null;
+          ended_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          requesting_gym_id: string;
+          partner_gym_id: string;
+          status?: Database['public']['Enums']['gym_partnership_status'];
+          monthly_visit_limit?: number;
+          requested_by: string;
+          approved_by?: string | null;
+          created_at?: string;
+          approved_at?: string | null;
+          ended_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          requesting_gym_id?: string;
+          partner_gym_id?: string;
+          status?: Database['public']['Enums']['gym_partnership_status'];
+          monthly_visit_limit?: number;
+          requested_by?: string;
+          approved_by?: string | null;
+          created_at?: string;
+          approved_at?: string | null;
+          ended_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'gym_partnerships_requesting_gym_id_fkey';
+            columns: ['requesting_gym_id'];
+            isOneToOne: false;
+            referencedRelation: 'gyms';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'gym_partnerships_partner_gym_id_fkey';
+            columns: ['partner_gym_id'];
+            isOneToOne: false;
+            referencedRelation: 'gyms';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      partner_gym_visits: {
+        Row: {
+          id: string;
+          member_user_id: string;
+          home_gym_id: string;
+          visited_gym_id: string;
+          partnership_id: string;
+          attendance_id: string | null;
+          visit_date: string;
+          checked_in_at: string;
+          checked_in_by: string | null;
+          check_in_method: Database['public']['Enums']['partner_check_in_method'];
+          status: Database['public']['Enums']['partner_visit_status'];
+          rejection_reason: string;
+          reversed_by: string | null;
+          reversed_at: string | null;
+          reversal_reason: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          member_user_id: string;
+          home_gym_id: string;
+          visited_gym_id: string;
+          partnership_id: string;
+          attendance_id?: string | null;
+          visit_date?: string;
+          checked_in_at?: string;
+          checked_in_by?: string | null;
+          check_in_method?: Database['public']['Enums']['partner_check_in_method'];
+          status?: Database['public']['Enums']['partner_visit_status'];
+          rejection_reason?: string;
+          reversed_by?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_user_id?: string;
+          home_gym_id?: string;
+          visited_gym_id?: string;
+          partnership_id?: string;
+          attendance_id?: string | null;
+          visit_date?: string;
+          checked_in_at?: string;
+          checked_in_by?: string | null;
+          check_in_method?: Database['public']['Enums']['partner_check_in_method'];
+          status?: Database['public']['Enums']['partner_visit_status'];
+          rejection_reason?: string;
+          reversed_by?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'partner_gym_visits_home_gym_id_fkey';
+            columns: ['home_gym_id'];
+            isOneToOne: false;
+            referencedRelation: 'gyms';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'partner_gym_visits_visited_gym_id_fkey';
+            columns: ['visited_gym_id'];
+            isOneToOne: false;
+            referencedRelation: 'gyms';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'partner_gym_visits_partnership_id_fkey';
+            columns: ['partnership_id'];
+            isOneToOne: false;
+            referencedRelation: 'gym_partnerships';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      gym_qr_codes: {
+        Row: {
+          id: string;
+          gym_id: string;
+          token: string;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoke_reason: string;
+        };
+        Insert: {
+          id?: string;
+          gym_id: string;
+          token: string;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          revoke_reason?: string;
+        };
+        Update: {
+          id?: string;
+          gym_id?: string;
+          token?: string;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          revoke_reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'gym_qr_codes_gym_id_fkey';
+            columns: ['gym_id'];
+            isOneToOne: false;
+            referencedRelation: 'gyms';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      qr_scan_logs: {
+        Row: {
+          id: string;
+          qr_code_id: string | null;
+          gym_id: string | null;
+          scanned_by: string | null;
+          token_fingerprint: string;
+          result: string;
+          message: string;
+          check_in_kind: string;
+          attendance_id: string | null;
+          partner_visit_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          qr_code_id?: string | null;
+          gym_id?: string | null;
+          scanned_by?: string | null;
+          token_fingerprint?: string;
+          result?: string;
+          message?: string;
+          check_in_kind?: string;
+          attendance_id?: string | null;
+          partner_visit_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          qr_code_id?: string | null;
+          gym_id?: string | null;
+          scanned_by?: string | null;
+          token_fingerprint?: string;
+          result?: string;
+          message?: string;
+          check_in_kind?: string;
+          attendance_id?: string | null;
+          partner_visit_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -681,6 +903,53 @@ export type Database = {
       self_check_in: {
         Args: { p_gym_id: string };
         Returns: Json;
+      };
+      check_in_at_partner_gym: {
+        Args: {
+          p_visited_gym_id: string;
+          p_check_in_method?: Database['public']['Enums']['partner_check_in_method'];
+        };
+        Returns: Json;
+      };
+      check_in_by_qr_token: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      ensure_active_gym_qr: {
+        Args: { p_gym_id: string };
+        Returns: Database['public']['Tables']['gym_qr_codes']['Row'];
+      };
+      get_active_gym_qr: {
+        Args: { p_gym_id: string };
+        Returns: Database['public']['Tables']['gym_qr_codes']['Row'];
+      };
+      regenerate_gym_qr: {
+        Args: { p_gym_id: string; p_reason?: string };
+        Returns: Database['public']['Tables']['gym_qr_codes']['Row'];
+      };
+      list_gym_qr_history: {
+        Args: { p_gym_id: string };
+        Returns: Database['public']['Tables']['gym_qr_codes']['Row'][];
+      };
+      reverse_partner_visit: {
+        Args: { p_visit_id: string; p_reason?: string };
+        Returns: Json;
+      };
+      get_partner_visit_allowance: {
+        Args: { p_member_user_id?: string };
+        Returns: Json;
+      };
+      count_approved_partner_visits_this_month: {
+        Args: { p_member_user_id: string; p_as_of?: string };
+        Returns: number;
+      };
+      gyms_are_active_partners: {
+        Args: { p_gym_a: string; p_gym_b: string };
+        Returns: boolean;
+      };
+      partnership_involves_owned_gym: {
+        Args: { p_partnership_id: string };
+        Returns: boolean;
       };
       current_user_role: {
         Args: Record<string, never>;
@@ -734,6 +1003,9 @@ export type Database = {
       membership_status: 'pending' | 'active' | 'expired' | 'rejected' | 'cancelled';
       payment_status: 'not_paid' | 'paid' | 'refunded' | 'failed';
       user_role: 'platform_admin' | 'gym_owner' | 'trainer' | 'member';
+      gym_partnership_status: 'pending' | 'active' | 'rejected' | 'suspended' | 'ended';
+      partner_visit_status: 'approved' | 'rejected' | 'reversed';
+      partner_check_in_method: 'code' | 'qr' | 'staff';
     };
     CompositeTypes: Record<string, never>;
   };
@@ -762,4 +1034,37 @@ export type SelfCheckInResult = {
   already_marked: boolean;
   attendance_id?: string;
   expires_at?: string;
+};
+
+export type PartnerCheckInResult = {
+  success: boolean;
+  message: string;
+  visits_used: number;
+  visits_remaining: number;
+  attendance_id?: string;
+  visit_id?: string;
+  monthly_limit?: number;
+  home_gym_id?: string;
+  visited_gym_id?: string;
+};
+
+export type PartnerVisitAllowance = {
+  monthly_limit: number;
+  visits_used: number;
+  visits_remaining: number;
+};
+
+export type QrCheckInResult = {
+  success: boolean;
+  code: string;
+  message: string;
+  detail?: string;
+  gym_name?: string;
+  gym_id?: string;
+  check_in_kind?: 'home' | 'partner' | '';
+  attendance_id?: string;
+  visit_id?: string;
+  visits_used?: number | null;
+  visits_remaining?: number | null;
+  monthly_limit?: number | null;
 };

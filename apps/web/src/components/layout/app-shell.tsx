@@ -27,6 +27,7 @@ export function AppShell({
   nav,
   children,
   variant = 'default',
+  headerSlot,
 }: {
   title: string;
   subtitle?: string;
@@ -34,6 +35,8 @@ export function AppShell({
   children: ReactNode;
   /** Owner shell: green active rail, softer SaaS spacing */
   variant?: 'default' | 'owner';
+  /** Optional replacement for the sidebar title block (e.g. gym switcher) */
+  headerSlot?: ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -146,11 +149,17 @@ export function AppShell({
               : 'rounded-lg border border-border px-3 py-3',
           )}
         >
-          <p className="truncate text-sm font-semibold tracking-tight text-foreground">{title}</p>
-          {subtitle ? (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p>
-          ) : (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{APP_NAME}</p>
+          {headerSlot ?? (
+            <>
+              <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+                {title}
+              </p>
+              {subtitle ? (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p>
+              ) : (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{APP_NAME}</p>
+              )}
+            </>
           )}
         </div>
         {navList}
@@ -176,10 +185,14 @@ export function AppShell({
           )}
         >
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{title}</p>
-            {subtitle ? (
-              <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-            ) : null}
+            {headerSlot ?? (
+              <>
+                <p className="truncate text-sm font-semibold">{title}</p>
+                {subtitle ? (
+                  <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+                ) : null}
+              </>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
@@ -220,10 +233,14 @@ export function AppShell({
                       : 'rounded-lg border border-border px-3 py-2',
                   )}
                 >
-                  <p className="text-sm font-semibold">{title}</p>
-                  {subtitle ? (
-                    <p className="text-xs text-muted-foreground">{subtitle}</p>
-                  ) : null}
+                  {headerSlot ?? (
+                    <>
+                      <p className="text-sm font-semibold">{title}</p>
+                      {subtitle ? (
+                        <p className="text-xs text-muted-foreground">{subtitle}</p>
+                      ) : null}
+                    </>
+                  )}
                 </div>
                 <Button
                   type="button"

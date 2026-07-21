@@ -7,4 +7,7 @@ export type {
   Json,
   MarkAttendanceResult,
   SelfCheckInResult,
+  PartnerCheckInResult,
+  PartnerVisitAllowance,
+  QrCheckInResult,
 } from './database';

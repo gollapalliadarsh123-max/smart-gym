@@ -49,12 +49,13 @@ export function useMemberAttendanceToday(
   client: TypedSupabaseClient,
   userId: string | null | undefined,
   dateYmd: string,
+  gymId?: string | null,
 ) {
   return useQuery({
-    queryKey: ['member-attendance-today', userId ?? '', dateYmd] as const,
+    queryKey: ['member-attendance-today', userId ?? '', dateYmd, gymId ?? 'any'] as const,
     queryFn: () => {
       if (!userId) return null;
-      return getMemberAttendanceForDate(client, userId, dateYmd);
+      return getMemberAttendanceForDate(client, userId, dateYmd, gymId ?? undefined);
     },
     enabled: Boolean(userId),
   });

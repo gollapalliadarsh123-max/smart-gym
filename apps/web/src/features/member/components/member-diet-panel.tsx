@@ -21,7 +21,6 @@ import {
   Pencil,
   Plus,
   Save,
-  Search,
   Trash2,
   Trophy,
   Utensils,
@@ -38,7 +37,6 @@ import {
   getTodayYmd,
   resolveFoodKey,
   scaleNutritionEntry,
-  searchNutritionCatalog,
   type DietFood,
   type MealSlot,
   type NutritionEntry,
@@ -340,7 +338,6 @@ function MemberDietEditor({
   const [foods, setFoods] = useState<DietFood[]>(initialFoods);
   const [waterLiters, setWaterLiters] = useState(initialWaterLiters);
   const [mealSlot, setMealSlot] = useState<MealSlot>('morning');
-  const [foodQuery, setFoodQuery] = useState('');
   const [grams, setGrams] = useState('100');
   const [customName, setCustomName] = useState('');
   const [customCal, setCustomCal] = useState('');
@@ -386,11 +383,6 @@ function MemberDietEditor({
     consistencyMeta,
     userData: dietProfile,
   });
-
-  const suggestions = useMemo(
-    () => (foodQuery.trim().length >= 1 ? searchNutritionCatalog(foodQuery, 10) : []),
-    [foodQuery],
-  );
 
   const calMax = targets?.calMax || targets?.calorieCenter || 2000;
   const proteinMax = targets?.proteinMaxGrams || 120;
@@ -669,7 +661,6 @@ function MemberDietEditor({
       };
       setFoods((prev) => [...prev, item]);
       setMealSlot(pendingMealSlot);
-      setFoodQuery('');
       setGrams(String(g));
       setPendingFood(null);
       setPortionGrams('100');
@@ -1066,73 +1057,9 @@ function MemberDietEditor({
           <GlassCard id="add-food" className="scroll-mt-24 p-5 sm:p-6">
             <h2 className="text-base font-semibold tracking-tight">Add Food</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Search → select → enter grams → Add Food. Nothing is saved until you confirm.
+              Pick a common or recent food, enter grams, then confirm. Nothing is saved until you
+              confirm.
             </p>
-
-            <div className="mt-4">
-              <label className="relative block">
-                <Search
-                  className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  value={foodQuery}
-                  onChange={(e) => setFoodQuery(e.target.value)}
-                  placeholder="Search Chicken Breast, Egg, Rice, Banana…"
-                  className="min-h-14 rounded-2xl pl-12 text-base"
-                  aria-label="Search foods"
-                  autoComplete="off"
-                />
-              </label>
-            </div>
-
-            {suggestions.length > 0 ? (
-              <ul
-                className="mt-2 max-h-64 space-y-0.5 overflow-y-auto rounded-2xl border border-border/70 bg-background p-1.5 shadow-lg"
-                role="listbox"
-                aria-label="Food suggestions"
-              >
-                {suggestions.map((item) => {
-                  const per100 = getPer100Macros(item.entry);
-                  const unit = servingUnitLabel(item.entry, item.key);
-                  const frequent = recentFoodNames.some(
-                    (n) => n.toLowerCase() === item.label.toLowerCase(),
-                  );
-                  return (
-                    <li key={item.key} role="option">
-                      <button
-                        type="button"
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-emerald-500/10',
-                          frequent && 'bg-emerald-500/5',
-                        )}
-                        onClick={() => {
-                          openPortionPicker(item.key, item.label);
-                          setFoodQuery('');
-                        }}
-                      >
-                        <span
-                          className="flex size-11 items-center justify-center rounded-xl bg-muted text-lg"
-                          aria-hidden
-                        >
-                          {foodEmoji(item.label)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="truncate font-semibold capitalize">{item.label}</span>
-                          </span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {unit} · {Math.round(per100.calories)} kcal · P{' '}
-                            {Math.round(per100.protein)}g · C {Math.round(per100.carbs)}g · F{' '}
-                            {Math.round(per100.fat)}g
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
 
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">

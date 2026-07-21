@@ -92,6 +92,35 @@ export async function completeOwnerOnboarding(
   return createGym(client, gymPayload);
 }
 
+export async function createAdditionalGym(
+  client: TypedSupabaseClient,
+  userId: string,
+  input: {
+    gymName: string;
+    location: string;
+    contactEmail: string;
+    gymPhone?: string;
+    price1Month?: number;
+    price3Month?: number;
+    price6Month?: number;
+    price12Month?: number;
+  },
+): Promise<Tables<'gyms'>> {
+  const gymPayload: Omit<TablesInsert<'gyms'>, 'code'> = {
+    name: input.gymName,
+    location: input.location,
+    contact_email: input.contactEmail,
+    phone: input.gymPhone ?? '',
+    owner_id: userId,
+    price_1_month: input.price1Month ?? 0,
+    price_3_month: input.price3Month ?? 0,
+    price_6_month: input.price6Month ?? 0,
+    price_12_month: input.price12Month ?? 0,
+  };
+
+  return createGym(client, gymPayload);
+}
+
 export async function completeMemberOnboarding(
   client: TypedSupabaseClient,
   userId: string,

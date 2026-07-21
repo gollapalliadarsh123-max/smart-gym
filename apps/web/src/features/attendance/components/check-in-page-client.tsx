@@ -9,6 +9,7 @@ import {
   getGymById,
   useActiveMembership,
   useMemberAttendanceToday,
+  usePartnerCheckIn,
   useSelfCheckIn,
 } from '@smart-gym/supabase';
 import { getTodayYmd } from '@smart-gym/shared';
@@ -32,14 +33,16 @@ function CheckInInner() {
     queryFn: () => getCurrentUserId(client),
   });
   const userId = userQuery.data ?? null;
-  const membershipQuery = useActiveMembership(client, userId);
+  const membershipAtGymQuery = useActiveMembership(client, userId, gymId);
+  const anyMembershipQuery = useActiveMembership(client, userId);
   const gymQuery = useQuery({
     queryKey: ['check-in-gym', gymId ?? ''],
     queryFn: () => (gymId ? getGymById(client, gymId) : null),
     enabled: Boolean(gymId),
   });
-  const todayAttendance = useMemberAttendanceToday(client, userId, today);
+  const todayAttendance = useMemberAttendanceToday(client, userId, today, gymId);
   const selfCheckIn = useSelfCheckIn(client);
+  const partnerCheckIn = usePartnerCheckIn(client);
 
   if (!gymId) {
     return <p className="text-sm text-destructive">Missing gym in check-in link.</p>;
@@ -63,47 +66,70 @@ function CheckInInner() {
     );
   }
 
-  const membership = membershipQuery.data;
-  const wrongGym = membership && membership.gym_id !== gymId;
-  const noMembership = !membershipQuery.isLoading && !membership;
+  const isHomeGym = Boolean(membershipAtGymQuery.data);
+  const hasAnyMembership = Boolean(anyMembershipQuery.data);
+  const canAttemptPartner = !isHomeGym && hasAnyMembership;
+  const noAccess =
+    !membershipAtGymQuery.isLoading &&
+    !anyMembershipQuery.isLoading &&
+    !isHomeGym &&
+    !hasAnyMembership;
 
   async function handleCheckIn() {
     setMessage(null);
     setError(null);
     try {
-      const result = await selfCheckIn.mutateAsync(gymId!);
-      setMessage(result.already_marked ? 'Already checked in today.' : 'You are checked in.');
+      if (isHomeGym) {
+        const result = await selfCheckIn.mutateAsync(gymId!);
+        setMessage(result.already_marked ? 'Already checked in today.' : 'You are checked in.');
+      } else {
+        const result = await partnerCheckIn.mutateAsync({
+          visitedGymId: gymId!,
+          checkInMethod: 'qr',
+        });
+        if (result.success) setMessage(result.message);
+        else setError(result.message);
+      }
       await todayAttendance.refetch();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Check-in failed.');
     }
   }
 
+  const pending =
+    selfCheckIn.isPending ||
+    partnerCheckIn.isPending ||
+    membershipAtGymQuery.isLoading ||
+    anyMembershipQuery.isLoading;
+
   return (
     <div className="space-y-4">
       <div className="text-center">
         <p className="text-sm text-muted-foreground">Checking in at</p>
         <p className="mt-1 text-xl font-semibold">{gymQuery.data?.name ?? 'Gym'}</p>
+        {canAttemptPartner ? (
+          <p className="mt-1 text-xs text-muted-foreground">Partner gym check-in</p>
+        ) : null}
       </div>
 
-      {noMembership || wrongGym ? (
+      {noAccess ? (
         <p className="text-sm text-destructive" role="alert">
-          {wrongGym
-            ? 'Your active membership is for a different gym.'
-            : 'You need an active membership at this gym to check in.'}
+          You need an active membership to check in.
         </p>
       ) : (
         <Button
           className="w-full"
           size="lg"
-          disabled={selfCheckIn.isPending || Boolean(todayAttendance.data)}
+          disabled={pending || Boolean(todayAttendance.data)}
           onClick={() => void handleCheckIn()}
         >
           {todayAttendance.data
             ? 'Already checked in today'
-            : selfCheckIn.isPending
+            : pending
               ? 'Checking in…'
-              : 'Confirm check-in'}
+              : canAttemptPartner
+                ? 'Partner check-in'
+                : 'Confirm check-in'}
         </Button>
       )}
 

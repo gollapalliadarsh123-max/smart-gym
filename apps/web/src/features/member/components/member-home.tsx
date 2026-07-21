@@ -18,6 +18,7 @@ import {
   useGymAttendanceToday,
   useGymMembers,
   useMemberPayments,
+  usePartnerVisitAllowance,
 } from '@smart-gym/supabase';
 import { useMemberContext } from '@/features/member/components/member-provider';
 import { CrowdMeter } from '@/features/attendance/components/crowd-meter';
@@ -46,6 +47,7 @@ export function MemberHome() {
   const paymentsQuery = useMemberPayments(client, userId);
   const gymTodayQuery = useGymAttendanceToday(client, gymId, today);
   const activeMembersQuery = useGymMembers(client, gymId, 'active');
+  const partnerAllowanceQuery = usePartnerVisitAllowance(client, userId);
 
   const streakQuery = useQuery({
     queryKey: ['user-streak', userId ?? ''],
@@ -90,6 +92,9 @@ export function MemberHome() {
     })),
   );
   const crowdLevel = calculateCrowdLevel(liveCount, (activeMembersQuery.data ?? []).length);
+  const partnerUsed = partnerAllowanceQuery.data?.visits_used ?? 0;
+  const partnerLimit = partnerAllowanceQuery.data?.monthly_limit ?? 3;
+  const partnerRemaining = partnerAllowanceQuery.data?.visits_remaining ?? Math.max(partnerLimit - partnerUsed, 0);
 
   return (
     <PageContainer>
@@ -153,12 +158,36 @@ export function MemberHome() {
         </SectionCard>
       </div>
 
+      <SectionCard title="Multi-Gym Access" description="Partner gym visits this calendar month">
+        <p className="text-sm font-medium">
+          {partnerUsed} of {partnerLimit} visits used this month
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {partnerRemaining} visit{partnerRemaining === 1 ? '' : 's'} remaining
+        </p>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-emerald-600 transition-all"
+            style={{
+              width: `${Math.min(100, (partnerUsed / Math.max(partnerLimit, 1)) * 100)}%`,
+            }}
+          />
+        </div>
+        <Link
+          href="/member/partner-gyms"
+          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-4 inline-flex min-h-11')}
+        >
+          View Partner Gyms
+        </Link>
+      </SectionCard>
+
       <SectionCard title="Quick links">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { href: '/member/payments', label: 'Payments' },
             { href: '/member/league', label: 'League' },
             { href: '/member/friends', label: 'Friends' },
+            { href: '/member/partner-gyms', label: 'Partner gyms' },
             { href: '/member/notifications', label: 'Alerts' },
             { href: '/member/settings', label: 'Profile settings' },
           ].map((item) => (

@@ -8,3 +8,4 @@ export * from './domain/attendance';
 export * from './domain/diet';
 export * from './domain/league';
 export * from './domain/streak';
+export * from './domain/partnerships';

@@ -17,6 +17,12 @@ import {
   sumSeasonPoints,
 } from '../league';
 import { getDietConsistencyBonus, computeMealLogStreak } from '../streak';
+import {
+  canApprovePartnerVisit,
+  partnerAllowanceProgress,
+  partnerVisitsRemaining,
+} from '../partnerships';
+import { buildGymCheckInPath, extractQrToken } from '../partnerships/qr-token';
 
 describe('validatePassword', () => {
   it('accepts a strong password', () => {
@@ -191,5 +197,40 @@ describe('dates', () => {
   it('calculates days left', () => {
     expect(calculateDaysLeft('2026-07-15', '2026-07-10')).toBe(5);
     expect(addDaysToYmd('2026-07-10', 30)).toBe('2026-08-09');
+  });
+});
+
+describe('partner visit allowance', () => {
+  it('approves first three visits and rejects the fourth', () => {
+    expect(canApprovePartnerVisit(0)).toBe(true);
+    expect(canApprovePartnerVisit(1)).toBe(true);
+    expect(canApprovePartnerVisit(2)).toBe(true);
+    expect(canApprovePartnerVisit(3)).toBe(false);
+  });
+
+  it('computes remaining visits and progress', () => {
+    expect(partnerVisitsRemaining(2)).toBe(1);
+    expect(partnerVisitsRemaining(3)).toBe(0);
+    expect(partnerAllowanceProgress(2)).toBeCloseTo(66.666, 1);
+  });
+
+  it('treats reversed usage as lower used count from caller', () => {
+    // Reversed visits are excluded in SQL; UI receives the post-filter count.
+    expect(canApprovePartnerVisit(2, 3)).toBe(true);
+    expect(partnerVisitsRemaining(2, 3)).toBe(1);
+  });
+});
+
+describe('secure gym QR tokens', () => {
+  const token = 'a'.repeat(64);
+
+  it('builds check-in path without gym ids', () => {
+    expect(buildGymCheckInPath(token)).toBe(`/checkin/${token}`);
+    expect(buildGymCheckInPath(token)).not.toContain('gym=');
+  });
+
+  it('extracts token from URL and rejects legacy gym-id links', () => {
+    expect(extractQrToken(`https://smartgym.app/checkin/${token}`)).toBe(token);
+    expect(extractQrToken('https://smartgym.app/check-in?gym=abc')).toBeNull();
   });
 });

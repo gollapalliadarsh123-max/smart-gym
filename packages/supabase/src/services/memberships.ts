@@ -10,16 +10,38 @@ import { assertData, assertOk } from '../lib/errors';
 export async function getActiveMembership(
   client: TypedSupabaseClient,
   userId: string,
+  gymId?: string,
 ): Promise<Tables<'gym_memberships'> | null> {
+  let query = client
+    .from('gym_memberships')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true });
+
+  if (gymId) {
+    query = query.eq('gym_id', gymId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function listActiveMemberships(
+  client: TypedSupabaseClient,
+  userId: string,
+): Promise<Tables<'gym_memberships'>[]> {
   const { data, error } = await client
     .from('gym_memberships')
     .select('*')
     .eq('user_id', userId)
     .eq('status', 'active')
-    .maybeSingle();
+    .order('created_at', { ascending: true });
 
   if (error) throw new Error(error.message);
-  return data;
+  return data ?? [];
 }
 
 export async function listGymMembers(

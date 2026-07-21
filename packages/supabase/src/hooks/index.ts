@@ -1,7 +1,7 @@
 export { queryKeys } from './query-keys';
 export { useProfile, useUpdateProfile } from './use-profile';
 export { useGym, useGymByCode } from './use-gym';
-export { useActiveMembership, usePendingJoinRequests } from './use-membership';
+export { useActiveMembership, useActiveMemberships, usePendingJoinRequests } from './use-membership';
 export {
   useOwnerGyms,
   useGymMembers,
@@ -35,3 +35,24 @@ export {
   useMarkAttendanceByCode,
   useSelfCheckIn,
 } from './use-attendance';
+export {
+  useGymPartnerships,
+  useActivePartnerGyms,
+  usePartnerVisitAllowance,
+  useMemberPartnerVisits,
+  useIncomingPartnerVisits,
+  useOutgoingPartnerVisits,
+  usePartnerVisitsForDate,
+  useRequestPartnership,
+  useRespondToPartnership,
+  useUpdatePartnershipStatus,
+  usePartnerCheckIn,
+  useReversePartnerVisit,
+} from './use-partnerships';
+export {
+  useActiveGymQr,
+  useGymQrHistory,
+  useQrScanLogs,
+  useRegenerateGymQr,
+  useCheckInByQrToken,
+} from './use-gym-qr';

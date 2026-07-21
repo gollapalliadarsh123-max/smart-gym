@@ -88,13 +88,19 @@ export async function getMemberAttendanceForDate(
   client: TypedSupabaseClient,
   userId: string,
   dateYmd: string,
+  gymId?: string,
 ): Promise<Tables<'attendance'> | null> {
-  const { data, error } = await client
+  let query = client
     .from('attendance')
     .select('*')
     .eq('user_id', userId)
-    .eq('attendance_date', dateYmd)
-    .maybeSingle();
+    .eq('attendance_date', dateYmd);
+
+  if (gymId) {
+    query = query.eq('gym_id', gymId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
 
   if (error) throw new Error(error.message);
   return data;

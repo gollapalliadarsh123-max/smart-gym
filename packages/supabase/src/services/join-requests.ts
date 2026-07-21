@@ -52,3 +52,17 @@ export async function getMemberJoinRequest(
   if (error) throw new Error(error.message);
   return data;
 }
+
+export async function listMemberJoinRequests(
+  client: TypedSupabaseClient,
+  userId: string,
+): Promise<Tables<'join_requests'>[]> {
+  const { data, error } = await client
+    .from('join_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}

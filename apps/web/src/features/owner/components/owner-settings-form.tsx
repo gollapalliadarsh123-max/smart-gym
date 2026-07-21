@@ -23,7 +23,9 @@ import {
   type MembershipPlan,
 } from '@smart-gym/shared';
 import { useUpdateGym } from '@smart-gym/supabase';
+import { createAdditionalGym } from '@smart-gym/supabase';
 import { useOwnerContext } from '@/features/owner/components/owner-provider';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
@@ -205,8 +207,14 @@ function SectionTitle({
 const inputClass = 'min-h-12 rounded-2xl';
 
 export function OwnerSettingsForm() {
-  const { client, gym } = useOwnerContext();
+  const { client, gym, userId, switchGym } = useOwnerContext();
+  const queryClient = useQueryClient();
   const updateGym = useUpdateGym(client);
+  const [createName, setCreateName] = useState('');
+  const [createLocation, setCreateLocation] = useState('');
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -728,6 +736,73 @@ export function OwnerSettingsForm() {
           </Button>
         </div>
       </form>
+
+      <CardShell className="space-y-4 p-5 sm:p-6">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Create another gym</h2>
+          <p className="text-sm text-muted-foreground">
+            Owners can manage multiple gyms. New gyms appear in the sidebar switcher.
+          </p>
+        </div>
+        <form
+          className="grid gap-3 sm:grid-cols-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!userId) return;
+            setCreateBusy(true);
+            setCreateMessage(null);
+            setCreateError(null);
+            void createAdditionalGym(client, userId, {
+              gymName: createName,
+              location: createLocation || 'TBD',
+              contactEmail: gym?.contact_email || '',
+              gymPhone: gym?.phone || '',
+            })
+              .then(async (created) => {
+                setCreateName('');
+                setCreateLocation('');
+                setCreateMessage(`Created ${created.name} (${created.code}).`);
+                await queryClient.invalidateQueries({ queryKey: ['owner-gyms'] });
+                switchGym(created.id);
+              })
+              .catch((err) => {
+                setCreateError(err instanceof Error ? err.message : 'Could not create gym.');
+              })
+              .finally(() => setCreateBusy(false));
+          }}
+        >
+          <Field>
+            <FieldLabel htmlFor="new-gym-name">Gym name</FieldLabel>
+            <Input
+              id="new-gym-name"
+              className={inputClass}
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder="Second location name"
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-gym-location">Location</FieldLabel>
+            <Input
+              id="new-gym-location"
+              className={inputClass}
+              value={createLocation}
+              onChange={(e) => setCreateLocation(e.target.value)}
+              placeholder="City / area"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Button type="submit" disabled={createBusy || createName.trim().length < 2}>
+              {createBusy ? 'Creating…' : 'Create gym'}
+            </Button>
+          </div>
+        </form>
+        {createMessage ? (
+          <p className="text-sm text-emerald-700 dark:text-emerald-300">{createMessage}</p>
+        ) : null}
+        {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
+      </CardShell>
     </div>
   );
 }

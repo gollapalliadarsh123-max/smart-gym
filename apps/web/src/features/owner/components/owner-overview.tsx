@@ -30,6 +30,8 @@ import {
   useMarkAttendanceByCode,
   usePendingJoinRequests,
   useProfilesMap,
+  useActiveGymQr,
+  buildGymCheckInUrl,
 } from '@smart-gym/supabase';
 import { useOwnerContext } from '@/features/owner/components/owner-provider';
 import { OwnerStatsCharts } from '@/features/owner/components/owner-stats-charts';
@@ -131,6 +133,7 @@ export function OwnerOverview() {
   const todayQuery = useGymAttendanceToday(client, gymId, today);
   const activeMembersQuery = useGymMembers(client, gymId, 'active');
   const mark = useMarkAttendanceByCode(client);
+  const gymQrQuery = useActiveGymQr(client, gymId);
 
   const members = membersQuery.data ?? [];
   const active = members.filter((m) => m.status === 'active');
@@ -214,12 +217,12 @@ export function OwnerOverview() {
       .slice(0, 10);
   }, [todayRows, payments, pending, profiles]);
 
-  const checkInUrl =
-    typeof window !== 'undefined' && gymId
-      ? `${window.location.origin}/check-in?gym=${gymId}`
-      : gymId
-        ? `/check-in?gym=${gymId}`
-        : '';
+  const checkInUrl = useMemo(() => {
+    const token = gymQrQuery.data?.token;
+    if (!token) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return buildGymCheckInUrl(token, origin || undefined);
+  }, [gymQrQuery.data?.token]);
 
   async function handleMark(e: React.FormEvent) {
     e.preventDefault();
@@ -620,12 +623,18 @@ export function OwnerOverview() {
             type="button"
             variant="outline"
             className="mt-3 min-h-12 rounded-2xl"
-            disabled={!gymId}
+            disabled={!checkInUrl}
             onClick={() => void copyCheckInLink()}
           >
             <Copy className="size-4" aria-hidden />
             {copied ? 'Copied' : 'Copy link'}
           </Button>
+          <Link
+            href="/owner/gym-qr"
+            className="mt-2 inline-flex text-sm font-medium text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-300"
+          >
+            Manage Gym QR
+          </Link>
         </DashboardCard>
       </div>
     </div>

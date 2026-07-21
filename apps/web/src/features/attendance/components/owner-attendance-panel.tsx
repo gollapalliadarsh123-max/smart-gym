@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -37,10 +37,17 @@ import {
   useGymAttendanceHistory,
   useGymAttendanceToday,
   useGymMembers,
+  useIncomingPartnerVisits,
   useMarkAttendanceByCode,
+  useOutgoingPartnerVisits,
+  usePartnerVisitsForDate,
   useProfilesMap,
+  useReversePartnerVisit,
+  buildGymCheckInUrl,
+  useActiveGymQr,
   type Tables,
 } from '@smart-gym/supabase';
+import { OwnerAttendanceQrCard } from '@/features/owner/components/owner-gym-qr-panel';
 import { useOwnerContext } from '@/features/owner/components/owner-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -317,11 +324,53 @@ export function OwnerAttendancePanel() {
   const membersQuery = useGymMembers(client, gymId, 'active');
   const allMembersQuery = useGymMembers(client, gymId);
   const mark = useMarkAttendanceByCode(client);
+  const partnerTodayQuery = usePartnerVisitsForDate(client, gymId, today);
+  const incomingMonthQuery = useIncomingPartnerVisits(client, gymId, monthStart);
+  const outgoingMonthQuery = useOutgoingPartnerVisits(client, gymId, monthStart);
+  const reverseVisit = useReversePartnerVisit(client);
+  const gymQrQuery = useActiveGymQr(client, gymId);
 
   const todayRows = todayQuery.data ?? [];
   const historyRows = historyQuery.data ?? [];
   const activeMembers = membersQuery.data ?? [];
   const allMembers = allMembersQuery.data ?? [];
+  const partnerTodayByUser = useMemo(() => {
+    const map = new Map<string, Tables<'partner_gym_visits'>>();
+    for (const visit of partnerTodayQuery.data ?? []) {
+      if (visit.status === 'approved' || visit.status === 'reversed') {
+        map.set(visit.member_user_id, visit);
+      }
+    }
+    return map;
+  }, [partnerTodayQuery.data]);
+
+  const partnerHomeGymIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (partnerTodayQuery.data ?? [])
+            .map((v) => v.home_gym_id)
+            .concat((incomingMonthQuery.data ?? []).map((v) => v.home_gym_id))
+            .concat((outgoingMonthQuery.data ?? []).map((v) => v.visited_gym_id)),
+        ),
+      ],
+    [partnerTodayQuery.data, incomingMonthQuery.data, outgoingMonthQuery.data],
+  );
+
+  const partnerGymNamesQuery = useQuery({
+    queryKey: ['attendance-partner-gym-names', partnerHomeGymIds.join(',')],
+    queryFn: async () => {
+      if (!partnerHomeGymIds.length) return {} as Record<string, string>;
+      const { data, error: qError } = await client
+        .from('gyms')
+        .select('id, name')
+        .in('id', partnerHomeGymIds);
+      if (qError) throw new Error(qError.message);
+      return Object.fromEntries((data ?? []).map((g) => [g.id, g.name]));
+    },
+    enabled: partnerHomeGymIds.length > 0,
+  });
+  const partnerGymNames = partnerGymNamesQuery.data ?? {};
 
   const membershipByUser = useMemo(() => {
     const map = new Map<string, Membership>();
@@ -342,8 +391,10 @@ export function OwnerAttendancePanel() {
     todayRows.forEach((r) => ids.add(r.user_id));
     historyRows.forEach((r) => ids.add(r.user_id));
     activeMembers.forEach((m) => ids.add(m.user_id));
+    (partnerTodayQuery.data ?? []).forEach((v) => ids.add(v.member_user_id));
+    (incomingMonthQuery.data ?? []).forEach((v) => ids.add(v.member_user_id));
     return [...ids];
-  }, [todayRows, historyRows, activeMembers]);
+  }, [todayRows, historyRows, activeMembers, partnerTodayQuery.data, incomingMonthQuery.data]);
 
   const profilesQuery = useProfilesMap(client, profileIds);
   const profiles = profilesQuery.data ?? {};
@@ -359,11 +410,12 @@ export function OwnerAttendancePanel() {
   const crowdStatus = crowdLabel(crowdLevel);
   const crowdProgress = Math.round((crowdLevel / 5) * 100);
 
-  const checkInPath = gymId ? `/check-in?gym=${gymId}` : '';
-  const checkInAbsolute =
-    typeof window !== 'undefined' && checkInPath
-      ? `${window.location.origin}${checkInPath}`
-      : checkInPath;
+  const checkInAbsolute = useMemo(() => {
+    const token = gymQrQuery.data?.token;
+    if (!token) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return buildGymCheckInUrl(token, origin || undefined);
+  }, [gymQrQuery.data?.token]);
 
   const filteredHistory = useMemo(() => {
     let rows: AttendanceRow[] = [];
@@ -738,27 +790,19 @@ export function OwnerAttendancePanel() {
           {/* QR / self check-in */}
           <CardShell className="p-5 sm:p-6">
             <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-foreground">
-              Self check-in QR
+              Secure check-in QR
             </h2>
             <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
-              Members with an active membership can scan this link
+              Token-only URL — manage rotation on the Gym QR page
             </p>
             <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-              <div className="rounded-2xl border border-slate-100 bg-white p-3 dark:border-border dark:bg-background">
-                {checkInAbsolute ? (
-                  <QRCodeSVG value={checkInAbsolute} size={132} level="M" includeMargin={false} />
-                ) : (
-                  <div className="flex size-[132px] items-center justify-center text-xs text-slate-400">
-                    No gym
-                  </div>
-                )}
-              </div>
+              <OwnerAttendanceQrCard />
               <div className="min-w-0 flex-1 space-y-3">
                 <Input
                   readOnly
                   value={checkInAbsolute || '—'}
                   className="min-h-11 rounded-2xl font-mono text-xs"
-                  aria-label="Self check-in URL"
+                  aria-label="Secure check-in URL"
                 />
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -779,6 +823,16 @@ export function OwnerAttendancePanel() {
                   >
                     <Share2 className="size-4" />
                     Share
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 rounded-2xl"
+                    onClick={() => {
+                      window.location.href = '/owner/gym-qr';
+                    }}
+                  >
+                    Manage QR
                   </Button>
                 </div>
               </div>
@@ -897,6 +951,20 @@ export function OwnerAttendancePanel() {
                                   {profileLabel(profile, row.user_id)}
                                 </p>
                                 <p className="truncate text-xs text-slate-400">{profile?.email}</p>
+                                {partnerTodayByUser.get(row.user_id) ||
+                                row.check_in_method === 'partner' ? (
+                                  <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
+                                    Partner visitor
+                                    {partnerTodayByUser.get(row.user_id)?.home_gym_id
+                                      ? ` · ${partnerGymNames[partnerTodayByUser.get(row.user_id)!.home_gym_id] ?? 'Home gym'}`
+                                      : ''}
+                                    {partnerTodayByUser.get(row.user_id)
+                                      ? ` · ${partnerTodayByUser.get(row.user_id)!.status}`
+                                      : ''}
+                                  </p>
+                                ) : (
+                                  <p className="mt-1 text-xs text-slate-400">Home-gym member</p>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -957,6 +1025,17 @@ export function OwnerAttendancePanel() {
                           <span className="text-xs capitalize text-slate-400">
                             {row.check_in_method.replace(/_/g, ' ')}
                           </span>
+                          {partnerTodayByUser.get(row.user_id) ||
+                          row.check_in_method === 'partner' ? (
+                            <span className="text-xs font-medium text-sky-700 dark:text-sky-300">
+                              Partner ·{' '}
+                              {partnerGymNames[
+                                partnerTodayByUser.get(row.user_id)?.home_gym_id ?? ''
+                              ] ?? 'visitor'}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">Home member</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1054,6 +1133,86 @@ export function OwnerAttendancePanel() {
           </aside>
         </div>
       ) : null}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Partner visits this month</h2>
+          <p className="text-sm text-muted-foreground">
+            Incoming partner members and your members visiting partners.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <CardShell className="p-4">
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Incoming visits
+            </p>
+            <p className="mt-2 text-2xl font-semibold">
+              {(incomingMonthQuery.data ?? []).filter((v) => v.status === 'approved').length}
+            </p>
+          </CardShell>
+          <CardShell className="p-4">
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Outgoing visits
+            </p>
+            <p className="mt-2 text-2xl font-semibold">
+              {(outgoingMonthQuery.data ?? []).filter((v) => v.status === 'approved').length}
+            </p>
+          </CardShell>
+          <CardShell className="p-4">
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Partner members today
+            </p>
+            <p className="mt-2 text-2xl font-semibold">
+              {(partnerTodayQuery.data ?? []).filter((v) => v.status === 'approved').length}
+            </p>
+          </CardShell>
+        </div>
+        {(incomingMonthQuery.data ?? []).filter((v) => v.status === 'approved').length > 0 ? (
+          <CardShell className="overflow-hidden">
+            <ul className="divide-y divide-border">
+              {(incomingMonthQuery.data ?? [])
+                .filter((v) => v.status === 'approved' || v.status === 'reversed')
+                .slice(0, 20)
+                .map((visit) => {
+                  const profile = profiles[visit.member_user_id];
+                  return (
+                    <li
+                      key={visit.id}
+                      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="font-medium">
+                          {profileLabel(profile, visit.member_user_id)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Home: {partnerGymNames[visit.home_gym_id] ?? 'Partner gym'} ·{' '}
+                          {formatDateTime(visit.checked_in_at)} · {visit.status}
+                        </p>
+                      </div>
+                      {visit.status === 'approved' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reverseVisit.isPending}
+                          onClick={() =>
+                            void reverseVisit.mutateAsync({
+                              visitId: visit.id,
+                              reason: 'Corrected by staff',
+                            })
+                          }
+                        >
+                          Reverse
+                        </Button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+            </ul>
+          </CardShell>
+        ) : (
+          <p className="text-sm text-muted-foreground">No incoming partner visits this month.</p>
+        )}
+      </section>
     </div>
   );
 }
