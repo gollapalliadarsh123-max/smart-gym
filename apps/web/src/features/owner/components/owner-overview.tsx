@@ -6,9 +6,6 @@ import {
   Banknote,
   CheckCircle2,
   ClipboardCheck,
-  Copy,
-  Link2,
-  Megaphone,
   TrendingUp,
   UserPlus,
   Users,
@@ -30,8 +27,6 @@ import {
   useMarkAttendanceByCode,
   usePendingJoinRequests,
   useProfilesMap,
-  useActiveGymQr,
-  buildGymCheckInUrl,
 } from '@smart-gym/supabase';
 import { useOwnerContext } from '@/features/owner/components/owner-provider';
 import { OwnerStatsCharts } from '@/features/owner/components/owner-stats-charts';
@@ -125,7 +120,6 @@ export function OwnerOverview() {
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const membersQuery = useGymMembers(client, gymId);
   const pendingQuery = usePendingJoinRequests(client, gymId);
@@ -133,7 +127,6 @@ export function OwnerOverview() {
   const todayQuery = useGymAttendanceToday(client, gymId, today);
   const activeMembersQuery = useGymMembers(client, gymId, 'active');
   const mark = useMarkAttendanceByCode(client);
-  const gymQrQuery = useActiveGymQr(client, gymId);
 
   const members = membersQuery.data ?? [];
   const active = members.filter((m) => m.status === 'active');
@@ -217,13 +210,6 @@ export function OwnerOverview() {
       .slice(0, 10);
   }, [todayRows, payments, pending, profiles]);
 
-  const checkInUrl = useMemo(() => {
-    const token = gymQrQuery.data?.token;
-    if (!token) return '';
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return buildGymCheckInUrl(token, origin || undefined);
-  }, [gymQrQuery.data?.token]);
-
   async function handleMark(e: React.FormEvent) {
     e.preventDefault();
     if (!gymId) return;
@@ -245,20 +231,6 @@ export function OwnerOverview() {
       await todayQuery.refetch();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark attendance.');
-    }
-  }
-
-  async function copyCheckInLink() {
-    if (!checkInUrl) return;
-    try {
-      const absolute = checkInUrl.startsWith('http')
-        ? checkInUrl
-        : `${window.location.origin}${checkInUrl}`;
-      await navigator.clipboard.writeText(absolute);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError('Could not copy link.');
     }
   }
 
@@ -291,38 +263,6 @@ export function OwnerOverview() {
       value: liveCount,
       hint: crowdStatus,
       icon: Activity,
-    },
-  ];
-
-  const quickActions: {
-    href: string;
-    label: string;
-    description: string;
-    icon: LucideIcon;
-  }[] = [
-    {
-      href: '#mark-attendance',
-      label: 'Mark Attendance',
-      description: 'Enter a 4-digit code',
-      icon: ClipboardCheck,
-    },
-    {
-      href: '/owner/payments',
-      label: 'Record Payment',
-      description: 'Log a member payment',
-      icon: Banknote,
-    },
-    {
-      href: '/owner/members',
-      label: 'Add Member',
-      description: 'Review requests & members',
-      icon: UserPlus,
-    },
-    {
-      href: '/owner/broadcast',
-      label: 'Broadcast',
-      description: 'Message your gym',
-      icon: Megaphone,
     },
   ];
 
@@ -375,57 +315,6 @@ export function OwnerOverview() {
             </DashboardCard>
           );
         })}
-      </section>
-
-      {/* Quick actions */}
-      <section aria-labelledby="owner-quick-actions">
-        <div className="mb-3 flex items-end justify-between gap-3 sm:mb-4">
-          <div>
-            <h2
-              id="owner-quick-actions"
-              className="text-base font-semibold tracking-tight text-slate-900 dark:text-foreground"
-            >
-              Quick Actions
-            </h2>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
-              Common owner tasks in one place
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {quickActions.map((action) => {
-            const Icon = action.icon;
-            const className =
-              'group flex min-h-[5.5rem] items-center gap-4 rounded-[20px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-border dark:bg-card dark:hover:border-emerald-800 dark:hover:bg-emerald-950/20 sm:px-5';
-            const body = (
-              <>
-                <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 transition-colors group-hover:bg-emerald-600 group-hover:text-white dark:bg-muted dark:text-foreground">
-                  <Icon className="size-5" aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-slate-900 dark:text-foreground">
-                    {action.label}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-muted-foreground">
-                    {action.description}
-                  </span>
-                </span>
-              </>
-            );
-            if (action.href.startsWith('#')) {
-              return (
-                <a key={action.label} href={action.href} className={className}>
-                  {body}
-                </a>
-              );
-            }
-            return (
-              <Link key={action.label} href={action.href} className={className}>
-                {body}
-              </Link>
-            );
-          })}
-        </div>
       </section>
 
       <OwnerStatsCharts client={client} gymId={gymId} />
@@ -564,79 +453,42 @@ export function OwnerOverview() {
         </DashboardCard>
       </div>
 
-      {/* Existing tools — same logic as before */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DashboardCard id="mark-attendance" className="scroll-mt-24 p-5 sm:p-6">
-          <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-foreground">
-            Mark attendance
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
-            Enter a member’s 4-digit code
-          </p>
-          <form onSubmit={(e) => void handleMark(e)} className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <Input
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              placeholder="4-digit code"
-              maxLength={4}
-              className="min-h-12 rounded-2xl border-slate-200 font-mono text-lg tracking-widest sm:max-w-[180px]"
-              inputMode="numeric"
-              aria-label="Attendance code"
-            />
-            <Button
-              type="submit"
-              className="min-h-12 rounded-2xl bg-emerald-600 px-6 hover:bg-emerald-700"
-              disabled={mark.isPending || !gymId}
-            >
-              {mark.isPending ? 'Marking…' : 'Mark'}
-            </Button>
-          </form>
-          {message ? (
-            <p className="mt-3 text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">
-              {message}
-            </p>
-          ) : null}
-          {error ? (
-            <p className="mt-3 text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-        </DashboardCard>
-
-        <DashboardCard className="p-5 sm:p-6">
-          <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-foreground">
-            Self check-in link
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
-            Share with members at the desk
-          </p>
-          <div className="mt-5 flex items-center gap-2">
-            <Link2 className="size-4 shrink-0 text-slate-400" aria-hidden />
-            <Input
-              className="min-h-12 rounded-2xl border-slate-200 font-mono text-xs"
-              readOnly
-              value={checkInUrl || '—'}
-              aria-label="Check-in URL"
-            />
-          </div>
+      <DashboardCard id="mark-attendance" className="scroll-mt-24 p-5 sm:p-6">
+        <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-foreground">
+          Mark attendance
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
+          Enter a member’s 4-digit code
+        </p>
+        <form onSubmit={(e) => void handleMark(e)} className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <Input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="4-digit code"
+            maxLength={4}
+            className="min-h-12 rounded-2xl border-slate-200 font-mono text-lg tracking-widest sm:max-w-[180px]"
+            inputMode="numeric"
+            aria-label="Attendance code"
+          />
           <Button
-            type="button"
-            variant="outline"
-            className="mt-3 min-h-12 rounded-2xl"
-            disabled={!checkInUrl}
-            onClick={() => void copyCheckInLink()}
+            type="submit"
+            className="min-h-12 rounded-2xl bg-emerald-600 px-6 hover:bg-emerald-700"
+            disabled={mark.isPending || !gymId}
           >
-            <Copy className="size-4" aria-hidden />
-            {copied ? 'Copied' : 'Copy link'}
+            {mark.isPending ? 'Marking…' : 'Mark'}
           </Button>
-          <Link
-            href="/owner/gym-qr"
-            className="mt-2 inline-flex text-sm font-medium text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-300"
-          >
-            Manage Gym QR
-          </Link>
-        </DashboardCard>
-      </div>
+        </form>
+        {message ? (
+          <p className="mt-3 text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">
+            {message}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="mt-3 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </DashboardCard>
     </div>
   );
 }

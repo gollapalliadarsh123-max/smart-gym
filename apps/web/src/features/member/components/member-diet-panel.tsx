@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Search,
   Trash2,
   Trophy,
   Utensils,
@@ -35,8 +36,9 @@ import {
   computeMealLogStreak,
   getDietConsistencyBonus,
   getTodayYmd,
-  resolveFoodKey,
+  listPopularFoods,
   scaleNutritionEntry,
+  searchNutritionCatalog,
   type DietFood,
   type MealSlot,
   type NutritionEntry,
@@ -53,7 +55,6 @@ import {
 import { useMemberContext } from '@/features/member/components/member-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Field, FieldLabel } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 
 const MEAL_UI: {
@@ -88,25 +89,13 @@ const MEAL_UI: {
   },
 ];
 
-const QUICK_FOODS: { key: string; label: string; emoji: string }[] = [
-  { key: 'chicken', label: 'Chicken Breast', emoji: '🍗' },
-  { key: 'egg', label: 'Egg', emoji: '🥚' },
-  { key: 'rice', label: 'Rice', emoji: '🍚' },
-  { key: 'oats', label: 'Oats', emoji: '🥣' },
-  { key: 'milk', label: 'Milk', emoji: '🥛' },
-  { key: 'greek_yogurt', label: 'Greek Yogurt', emoji: '🥛' },
-  { key: 'paneer', label: 'Paneer', emoji: '🧀' },
-  { key: 'fish', label: 'Fish', emoji: '🐟' },
-  { key: 'banana', label: 'Banana', emoji: '🍌' },
-  { key: 'apple', label: 'Apple', emoji: '🍎' },
-  { key: 'broccoli', label: 'Broccoli', emoji: '🥦' },
-  { key: 'potato', label: 'Potato', emoji: '🥔' },
-  { key: 'peanut_butter', label: 'Peanut Butter', emoji: '🥜' },
-  { key: 'whey_protein', label: 'Whey Protein', emoji: '💪' },
-  { key: 'tofu', label: 'Tofu', emoji: '🧈' },
-];
+const WATER_QUICK_ML = [250, 500, 750, 1000] as const;
+const POPULAR_FOODS = listPopularFoods(12);
 
-/** Nutrition per 100g (or 100ml) for preview cards — proportional to catalog data. */
+function foodLabel(key: string, entry?: NutritionEntry) {
+  return entry?.label ?? key.replace(/_/g, ' ');
+}
+
 function getPer100Macros(entry: NutritionEntry) {
   if (entry.per100g) return entry.per100g;
   if (entry.perUnit) {
@@ -121,14 +110,6 @@ function getPer100Macros(entry: NutritionEntry) {
   }
   return { calories: 0, protein: 0, carbs: 0, fat: 0 };
 }
-
-function servingUnitLabel(entry: NutritionEntry, key: string) {
-  const liquid = /milk|water|yogurt|curd|juice|smoothie|shake/i.test(key);
-  if (entry.perUnit?.grams) return `per serving (~${entry.perUnit.grams}g)`;
-  return liquid ? 'per 100 ml' : 'per 100 g';
-}
-
-const WATER_QUICK_ML = [250, 500, 750, 1000] as const;
 
 type ChartRange = 'day' | 'week' | 'month';
 
@@ -338,7 +319,10 @@ function MemberDietEditor({
   const [foods, setFoods] = useState<DietFood[]>(initialFoods);
   const [waterLiters, setWaterLiters] = useState(initialWaterLiters);
   const [mealSlot, setMealSlot] = useState<MealSlot>('morning');
-  const [grams, setGrams] = useState('100');
+  const [foodQuery, setFoodQuery] = useState('');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [portionGrams, setPortionGrams] = useState('100');
+  const [addMode, setAddMode] = useState<'search' | 'custom'>('search');
   const [customName, setCustomName] = useState('');
   const [customCal, setCustomCal] = useState('');
   const [customProtein, setCustomProtein] = useState('');
@@ -352,11 +336,6 @@ function MemberDietEditor({
   const [editCal, setEditCal] = useState('');
   const [editProtein, setEditProtein] = useState('');
   const [chartRange, setChartRange] = useState<ChartRange>('week');
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [pendingFood, setPendingFood] = useState<{ key: string; label: string } | null>(null);
-  const [portionGrams, setPortionGrams] = useState('100');
-  const [pendingMealSlot, setPendingMealSlot] = useState<MealSlot>('morning');
-  const [isAddingFood, setIsAddingFood] = useState(false);
 
   const datesQuery = useDietLogDates(client, userId, 60);
   const historyQuery = useDietLogs(client, userId, 40);
@@ -419,25 +398,6 @@ function MemberDietEditor({
     const mealPct = mealCompletion / 100;
     return Math.round(((calPct + proPct + watPct + mealPct) / 4) * 100);
   }, [calMax, proteinMax, waterGoal, totals, waterLiters, mealCompletion]);
-
-  const recentFoodNames = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const f of foods) {
-      if (!f.name) continue;
-      counts.set(f.name, (counts.get(f.name) ?? 0) + 1);
-    }
-    for (const row of historyQuery.data ?? []) {
-      const list = (row.foods as DietFood[] | null) ?? [];
-      for (const f of list) {
-        if (!f.name) continue;
-        counts.set(f.name, (counts.get(f.name) ?? 0) + 2);
-      }
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([name]) => name);
-  }, [foods, historyQuery.data]);
 
   const dietLogStreak = useMemo(
     () => computeMealLogStreak(new Set(loggedDates), today, foods.length > 0),
@@ -607,21 +567,51 @@ function MemberDietEditor({
     window.setTimeout(() => setAddPulse(false), 700);
   }
 
-  function openPortionPicker(key: string, label: string) {
-    const resolvedKey = resolveFoodKey(key) ?? resolveFoodKey(label) ?? key;
-    const entry = NUTRITION_DB[resolvedKey] ?? NUTRITION_DB[key];
-    if (!entry) {
-      setError(`Food not found in catalog: ${label}`);
-      return;
-    }
-    const finalKey = NUTRITION_DB[resolvedKey] ? resolvedKey : key;
-    // Select only — never add here. Modal asks for grams.
-    setPendingFood({ key: finalKey, label });
+  const catalogHits = useMemo(
+    () => (foodQuery.trim().length >= 1 ? searchNutritionCatalog(foodQuery, 8) : []),
+    [foodQuery],
+  );
+
+  const selectedEntry = selectedKey ? NUTRITION_DB[selectedKey] : null;
+  const selectedLabel = selectedKey ? foodLabel(selectedKey, selectedEntry ?? undefined) : '';
+  const portionValue = Number(portionGrams);
+  const hasValidPortion = Number.isFinite(portionValue) && portionValue > 0;
+  const portionMacros =
+    selectedEntry && hasValidPortion ? scaleNutritionEntry(selectedEntry, portionValue) : null;
+  const servingGrams = selectedEntry?.perUnit?.grams;
+  const portionChips = servingGrams
+    ? [
+        { label: '1 serve', value: servingGrams },
+        { label: '2 serve', value: servingGrams * 2 },
+        { label: '50g', value: 50 },
+        { label: '100g', value: 100 },
+        { label: '150g', value: 150 },
+        { label: '200g', value: 200 },
+      ]
+    : [
+        { label: '50g', value: 50 },
+        { label: '100g', value: 100 },
+        { label: '150g', value: 150 },
+        { label: '200g', value: 200 },
+        { label: '250g', value: 250 },
+      ];
+
+  function selectCatalogFood(key: string) {
+    const entry = NUTRITION_DB[key];
+    if (!entry) return;
+    setSelectedKey(key);
+    setFoodQuery(foodLabel(key, entry));
     setPortionGrams(
       entry.perUnit?.grams && entry.perUnit.grams > 0 ? String(entry.perUnit.grams) : '100',
     );
-    setPendingMealSlot(mealSlot);
+    setAddMode('search');
     setError(null);
+  }
+
+  function clearSelectedFood() {
+    setSelectedKey(null);
+    setFoodQuery('');
+    setPortionGrams('100');
   }
 
   function adjustPortion(delta: number) {
@@ -632,59 +622,44 @@ function MemberDietEditor({
     });
   }
 
-  function confirmPendingFood() {
-    if (!pendingFood || isAddingFood) return;
-    const entry = NUTRITION_DB[pendingFood.key];
-    if (!entry) {
-      setError('Food not found in catalog.');
-      setPendingFood(null);
+  function addCatalogFood() {
+    if (!selectedKey || !selectedEntry || !portionMacros || !hasValidPortion) {
+      setError('Search and choose a food, then set how many grams you ate.');
       return;
     }
-    const g = Number(portionGrams);
-    if (!Number.isFinite(g) || g <= 0) {
-      setError('Enter how many grams you ate.');
-      return;
-    }
-    setIsAddingFood(true);
-    try {
-      const macros = scaleNutritionEntry(entry, g);
-      const item: DietFood = {
-        name: pendingFood.label,
-        calories: macros.calories,
-        protein: macros.protein,
-        carbs: macros.carbs,
-        fat: macros.fat,
-        junk: macros.junk,
-        neutral: macros.neutral,
-        mealSlot: pendingMealSlot,
+    setFoods((prev) => [
+      ...prev,
+      {
+        name: selectedLabel,
+        calories: portionMacros.calories,
+        protein: portionMacros.protein,
+        carbs: portionMacros.carbs,
+        fat: portionMacros.fat,
+        junk: portionMacros.junk,
+        neutral: portionMacros.neutral,
+        mealSlot,
         loggedAt: new Date().toISOString(),
-      };
-      setFoods((prev) => [...prev, item]);
-      setMealSlot(pendingMealSlot);
-      setGrams(String(g));
-      setPendingFood(null);
-      setPortionGrams('100');
-      setError(null);
-      setMessage(`Added ${g}g ${pendingFood.label} ✓`);
-      pulseSuccess();
-      window.setTimeout(() => setMessage(null), 3500);
-    } finally {
-      window.setTimeout(() => setIsAddingFood(false), 400);
-    }
+      },
+    ]);
+    clearSelectedFood();
+    setError(null);
+    setMessage(`Added ${portionValue}g ${selectedLabel}`);
+    pulseSuccess();
+    window.setTimeout(() => setMessage(null), 3500);
   }
 
-  const pendingEntry = pendingFood ? NUTRITION_DB[pendingFood.key] : null;
-  const pendingGramsValue = Number(portionGrams);
-  const hasValidPortion = Number.isFinite(pendingGramsValue) && pendingGramsValue > 0;
-  const pendingPer100 = pendingEntry ? getPer100Macros(pendingEntry) : null;
-  const pendingMacros =
-    pendingEntry && hasValidPortion
-      ? scaleNutritionEntry(pendingEntry, pendingGramsValue)
-      : null;
-  const pendingUnitGrams = pendingEntry?.perUnit?.grams;
-  const pendingServingLabel = pendingFood && pendingEntry
-    ? servingUnitLabel(pendingEntry, pendingFood.key)
-    : 'per 100 g';
+  function startCustomizeFromCatalog() {
+    if (!selectedKey || !selectedEntry) return;
+    const macros = hasValidPortion
+      ? scaleNutritionEntry(selectedEntry, portionValue)
+      : getPer100Macros(selectedEntry);
+    setCustomName(selectedLabel);
+    setCustomCal(String(Math.round(macros.calories)));
+    setCustomProtein(String(Math.round(macros.protein * 10) / 10));
+    setCustomCarbs(String(Math.round(macros.carbs * 10) / 10));
+    setCustomFat(String(Math.round(macros.fat * 10) / 10));
+    setAddMode('custom');
+  }
 
   function addCustomFood() {
     const name = customName.trim();
@@ -709,8 +684,12 @@ function MemberDietEditor({
     setCustomProtein('');
     setCustomCarbs('');
     setCustomFat('');
+    clearSelectedFood();
+    setAddMode('search');
     setError(null);
+    setMessage(`Added ${name}`);
     pulseSuccess();
+    window.setTimeout(() => setMessage(null), 3500);
   }
 
   function addWaterMl(ml: number) {
@@ -793,10 +772,6 @@ function MemberDietEditor({
     const t = window.setTimeout(() => setMessage(null), 5000);
     return () => window.clearTimeout(t);
   }, [message]);
-
-  const availableQuick = QUICK_FOODS.filter(
-    (f) => NUTRITION_DB[f.key] || resolveFoodKey(f.key),
-  );
 
   return (
     <motion.div
@@ -929,239 +904,361 @@ function MemberDietEditor({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
-        {/* Meal timeline + add food */}
+        {/* Add food */}
         <div className="space-y-4 lg:col-span-3">
-          <GlassCard className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight">Meal Timeline</h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Visual meal log · select a meal then add foods
-                </p>
-              </div>
-              <select
-                className="min-h-11 rounded-2xl border border-input bg-background px-3 text-sm"
-                value={mealSlot}
-                onChange={(e) => setMealSlot(e.target.value as MealSlot)}
-                aria-label="Active meal slot"
-              >
-                {MEAL_UI.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.emoji} {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {MEAL_UI.map((meal) => {
-                const list = foodsByMeal[meal.value];
-                const mealCals = list.reduce((s, f) => s + Number(f.calories || 0), 0);
-                const mealPro = list.reduce((s, f) => s + Number(f.protein || 0), 0);
-                const active = mealSlot === meal.value;
-                return (
-                  <button
-                    key={meal.value}
-                    type="button"
-                    onClick={() => setMealSlot(meal.value)}
-                    className={cn(
-                      'w-full rounded-[20px] border p-4 text-left transition-colors',
-                      active
-                        ? 'border-emerald-500/50 bg-emerald-500/10'
-                        : 'border-border/60 bg-background/30 hover:bg-muted/40',
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">
-                          <span className="mr-2" aria-hidden>
-                            {meal.emoji}
-                          </span>
-                          {meal.label}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {list.length === 0
-                            ? meal.emptyHint
-                            : `${Math.round(mealCals)} kcal · ${Math.round(mealPro)}g protein`}
-                        </p>
-                      </div>
-                      {list.length > 0 ? (
-                        <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                          {list.length}
-                        </span>
-                      ) : null}
-                    </div>
-                    {list.length > 0 ? (
-                      <ul className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
-                        {list.map((food) => {
-                          const globalIndex = foods.indexOf(food);
-                          return (
-                            <li
-                              key={`${food.name}-${globalIndex}`}
-                              className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/60 px-3 py-2"
-                            >
-                              <span
-                                className="flex size-10 items-center justify-center rounded-xl bg-muted text-lg"
-                                aria-hidden
-                              >
-                                {foodEmoji(food.name || '')}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-medium">{food.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {Math.round(Number(food.calories) || 0)} kcal · P{' '}
-                                  {Math.round(Number(food.protein) || 0)}g
-                                  {food.loggedAt
-                                    ? ` · ${new Date(food.loggedAt).toLocaleTimeString(undefined, {
-                                        hour: 'numeric',
-                                        minute: '2-digit',
-                                      })}`
-                                    : ''}
-                                </p>
-                              </div>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="min-h-10 min-w-10"
-                                aria-label={`Edit ${food.name}`}
-                                onClick={() => startEdit(globalIndex)}
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="min-h-10 min-w-10"
-                                aria-label={`Remove ${food.name}`}
-                                onClick={() => removeFood(globalIndex)}
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        No meals logged yet — tap to select, then add food.
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </GlassCard>
-
           <GlassCard id="add-food" className="scroll-mt-24 p-5 sm:p-6">
-            <h2 className="text-base font-semibold tracking-tight">Add Food</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Pick a common or recent food, enter grams, then confirm. Nothing is saved until you
-              confirm.
-            </p>
-
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Common foods
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Add Food</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Search the catalog or enter your own macros.
               </p>
-              <div className="flex flex-wrap gap-2">
-                {availableQuick.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => openPortionPicker(item.key, item.label)}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border/70 bg-background/50 px-3.5 text-sm font-semibold transition-colors hover:border-emerald-400 hover:bg-emerald-500/10"
-                  >
-                    <span aria-hidden>{item.emoji}</span>
-                    {item.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
-            {recentFoodNames.length > 0 ? (
-              <div className="mt-4">
-                <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Recent
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {recentFoodNames.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm font-medium"
-                      onClick={() => {
-                        const key = resolveFoodKey(name);
-                        if (key) openPortionPicker(key, name);
-                        else {
-                          setCustomName(name);
-                          setComposeOpen(true);
-                        }
-                      }}
-                    >
-                      <span aria-hidden>{foodEmoji(name)}</span>
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Meal">
+              {MEAL_UI.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => setMealSlot(m.value)}
+                  className={cn(
+                    'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors',
+                    mealSlot === m.value
+                      ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                      : 'border-border/70 bg-background/50 hover:bg-muted/50',
+                  )}
+                >
+                  <span aria-hidden>{m.emoji}</span>
+                  {m.label}
+                </button>
+              ))}
+            </div>
 
-            <div className="mt-5 border-t border-border/60 pt-4">
+            <div className="mt-4 flex gap-2">
               <button
                 type="button"
-                className="text-sm font-semibold text-emerald-600 dark:text-emerald-400"
-                onClick={() => setComposeOpen((v) => !v)}
+                onClick={() => {
+                  setAddMode('search');
+                  setError(null);
+                }}
+                className={cn(
+                  'min-h-10 flex-1 rounded-2xl border text-sm font-semibold transition-colors',
+                  addMode === 'search'
+                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                    : 'border-border hover:bg-muted/40',
+                )}
               >
-                {composeOpen ? 'Hide custom food' : 'Add custom food (advanced)'}
+                Search catalog
               </button>
-              {composeOpen ? (
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Input
-                    placeholder="Name"
-                    className="min-h-11 rounded-2xl"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
+              <button
+                type="button"
+                onClick={() => {
+                  setAddMode('custom');
+                  setError(null);
+                }}
+                className={cn(
+                  'min-h-10 flex-1 rounded-2xl border text-sm font-semibold transition-colors',
+                  addMode === 'custom'
+                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                    : 'border-border hover:bg-muted/40',
+                )}
+              >
+                Custom food
+              </button>
+            </div>
+
+            {addMode === 'search' ? (
+              <div className="mt-4 space-y-4">
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden
                   />
+                  <Input
+                    value={foodQuery}
+                    onChange={(e) => {
+                      setFoodQuery(e.target.value);
+                      setSelectedKey(null);
+                    }}
+                    placeholder="Search chicken, rice, egg…"
+                    className="min-h-12 rounded-2xl pl-10"
+                    aria-label="Search foods"
+                    autoComplete="off"
+                  />
+                  {foodQuery || selectedKey ? (
+                    <button
+                      type="button"
+                      className="absolute top-1/2 right-2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted"
+                      aria-label="Clear search"
+                      onClick={clearSelectedFood}
+                    >
+                      <X className="size-4" />
+                    </button>
+                  ) : null}
+                </div>
+
+                {!selectedKey && foodQuery.trim().length === 0 ? (
+                  <div>
+                    <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Popular
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {POPULAR_FOODS.map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => selectCatalogFood(item.key)}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border/70 bg-background/50 px-3 text-sm font-medium capitalize transition-colors hover:border-emerald-400 hover:bg-emerald-500/10"
+                        >
+                          <span aria-hidden>{foodEmoji(item.label)}</span>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {!selectedKey && catalogHits.length > 0 ? (
+                  <ul className="max-h-56 overflow-y-auto rounded-2xl border border-border/70 divide-y divide-border/60">
+                    {catalogHits.map((hit) => {
+                      const per100 = getPer100Macros(hit.entry);
+                      return (
+                        <li key={hit.key}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-muted/50"
+                            onClick={() => selectCatalogFood(hit.key)}
+                          >
+                            <span
+                              className="flex size-10 items-center justify-center rounded-xl bg-muted text-lg"
+                              aria-hidden
+                            >
+                              {foodEmoji(hit.label)}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-medium capitalize">
+                                {hit.label}
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                {Math.round(per100.calories)} kcal · {Math.round(per100.protein)}g
+                                protein / 100g
+                              </span>
+                            </span>
+                            <Plus className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+
+                {!selectedKey && foodQuery.trim().length >= 2 && catalogHits.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/70 px-4 py-5 text-center">
+                    <p className="text-sm font-medium">No catalog match</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Switch to Custom food and enter macros yourself.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 min-h-10 rounded-2xl"
+                      onClick={() => {
+                        setCustomName(foodQuery.trim());
+                        setAddMode('custom');
+                      }}
+                    >
+                      Create custom food
+                    </Button>
+                  </div>
+                ) : null}
+
+                {selectedKey && selectedEntry ? (
+                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold capitalize">
+                          <span aria-hidden>{foodEmoji(selectedLabel)} </span>
+                          {selectedLabel}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {servingGrams
+                            ? `1 serving ≈ ${servingGrams}g`
+                            : 'Macros scale with grams'}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="min-h-10 min-w-10"
+                        aria-label="Clear selected food"
+                        onClick={clearSelectedFood}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+
+                    <p className="mt-4 text-sm font-medium">How much did you eat?</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-12 min-w-12 rounded-2xl"
+                        aria-label="Decrease 10 grams"
+                        onClick={() => adjustPortion(-10)}
+                      >
+                        <Minus className="size-4" />
+                      </Button>
+                      <Input
+                        type="number"
+                        min={1}
+                        inputMode="decimal"
+                        className="min-h-12 flex-1 rounded-2xl text-center text-xl font-semibold"
+                        value={portionGrams}
+                        onChange={(e) => setPortionGrams(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addCatalogFood();
+                          }
+                        }}
+                        aria-label="Portion in grams"
+                      />
+                      <span className="text-sm font-medium text-muted-foreground">g</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-12 min-w-12 rounded-2xl"
+                        aria-label="Increase 10 grams"
+                        onClick={() => adjustPortion(10)}
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {portionChips.map((chip) => (
+                        <button
+                          key={chip.label}
+                          type="button"
+                          className={cn(
+                            'min-h-9 rounded-full border px-3 text-sm font-semibold',
+                            Number(portionGrams) === chip.value
+                              ? 'border-emerald-500 bg-emerald-500/20 text-emerald-800 dark:text-emerald-200'
+                              : 'border-border hover:bg-muted',
+                          )}
+                          onClick={() => setPortionGrams(String(chip.value))}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-4 gap-2 rounded-2xl border border-border/60 bg-background/50 p-3 text-center">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Calories</p>
+                        <p className="font-semibold tabular-nums">
+                          {portionMacros ? Math.round(portionMacros.calories) : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Protein</p>
+                        <p className="font-semibold tabular-nums">
+                          {portionMacros
+                            ? `${Math.round(portionMacros.protein * 10) / 10}g`
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Carbs</p>
+                        <p className="font-semibold tabular-nums">
+                          {portionMacros ? `${Math.round(portionMacros.carbs * 10) / 10}g` : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Fat</p>
+                        <p className="font-semibold tabular-nums">
+                          {portionMacros ? `${Math.round(portionMacros.fat * 10) / 10}g` : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        className="min-h-12 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700"
+                        disabled={!hasValidPortion}
+                        onClick={addCatalogFood}
+                      >
+                        <Plus className="size-4" />
+                        Add to {MEAL_UI.find((m) => m.value === mealSlot)?.label ?? 'meal'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-12 rounded-2xl"
+                        onClick={startCustomizeFromCatalog}
+                      >
+                        Customize macros
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Use this for homemade meals, restaurant dishes, or any food not in the catalog.
+                </p>
+                <Input
+                  placeholder="Food name"
+                  className="min-h-12 rounded-2xl"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <Input
                     placeholder="Calories"
                     type="number"
                     className="min-h-11 rounded-2xl"
                     value={customCal}
                     onChange={(e) => setCustomCal(e.target.value)}
+                    aria-label="Calories"
                   />
                   <Input
-                    placeholder="Protein"
+                    placeholder="Protein (g)"
                     type="number"
                     className="min-h-11 rounded-2xl"
                     value={customProtein}
                     onChange={(e) => setCustomProtein(e.target.value)}
+                    aria-label="Protein grams"
                   />
                   <Input
-                    placeholder="Carbs"
+                    placeholder="Carbs (g)"
                     type="number"
                     className="min-h-11 rounded-2xl"
                     value={customCarbs}
                     onChange={(e) => setCustomCarbs(e.target.value)}
+                    aria-label="Carbs grams"
                   />
                   <Input
-                    placeholder="Fat"
+                    placeholder="Fat (g)"
                     type="number"
                     className="min-h-11 rounded-2xl"
                     value={customFat}
                     onChange={(e) => setCustomFat(e.target.value)}
+                    aria-label="Fat grams"
                   />
-                  <Button
-                    type="button"
-                    className="min-h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-                    onClick={addCustomFood}
-                  >
-                    Add custom
-                  </Button>
                 </div>
-              ) : null}
-            </div>
+                <Button
+                  type="button"
+                  className="min-h-12 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700"
+                  onClick={addCustomFood}
+                >
+                  <Plus className="size-4" />
+                  Add custom to {MEAL_UI.find((m) => m.value === mealSlot)?.label ?? 'meal'}
+                </Button>
+              </div>
+            )}
           </GlassCard>
         </div>
 
@@ -1476,39 +1573,6 @@ function MemberDietEditor({
         )}
       </section>
 
-      {/* History strip */}
-      <GlassCard className="p-5 sm:p-6">
-        <h2 className="text-base font-semibold tracking-tight">History</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">Recently saved diet days</p>
-        {historyQuery.isLoading ? (
-          <div className="mt-4 h-20 animate-pulse rounded-2xl bg-muted" />
-        ) : (historyQuery.data ?? []).length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No saved diet days yet.</p>
-        ) : (
-          <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-            {(historyQuery.data ?? []).slice(0, 14).map((row) => {
-              const t = (row.totals ?? {}) as {
-                calories?: number;
-                protein?: number;
-                waterLiters?: number;
-              };
-              return (
-                <div
-                  key={row.id}
-                  className="min-w-[140px] rounded-2xl border border-border/60 bg-background/40 p-3"
-                >
-                  <p className="text-xs font-medium text-muted-foreground">{row.log_date}</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums">{row.diet_score}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {Math.round(Number(t.calories) || 0)} kcal · {Math.round(Number(t.protein) || 0)}p
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </GlassCard>
-
       {/* Save bar */}
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -1560,255 +1624,6 @@ function MemberDietEditor({
           </motion.span>
         ) : null}
       </div>
-
-      {/* Grams bottom sheet / modal — select food never adds until Add Food */}
-      {typeof document !== 'undefined' && pendingFood && pendingEntry && pendingPer100
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="portion-title"
-            >
-              <button
-                type="button"
-                className="absolute inset-0 bg-slate-950/70"
-                aria-label="Close"
-                onClick={() => {
-                  setPendingFood(null);
-                  setPortionGrams('100');
-                }}
-              />
-              <div className="relative z-10 max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-[24px] border border-border bg-background p-5 shadow-2xl sm:rounded-[24px] sm:p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 id="portion-title" className="text-xl font-semibold tracking-tight">
-                      <span aria-hidden>{foodEmoji(pendingFood.label)} </span>
-                      {pendingFood.label}
-                    </h2>
-                    <p className="mt-1 text-sm capitalize text-muted-foreground">
-                      {pendingServingLabel}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-lg"
-                    className="min-h-11 min-w-11 shrink-0"
-                    aria-label="Close"
-                    onClick={() => {
-                      setPendingFood(null);
-                      setPortionGrams('100');
-                    }}
-                  >
-                    <X className="size-5" />
-                  </Button>
-                </div>
-
-                {/* Per 100g base */}
-                <div className="mt-4 rounded-2xl border border-border/70 bg-muted/30 p-4">
-                  <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                    Per 100g
-                  </p>
-                  <div className="mt-2 grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <p className="text-[11px] text-muted-foreground">Calories</p>
-                      <p className="font-semibold tabular-nums">
-                        {Math.round(pendingPer100.calories)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-muted-foreground">Protein</p>
-                      <p className="font-semibold tabular-nums">
-                        {Math.round(pendingPer100.protein)}g
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-muted-foreground">Carbs</p>
-                      <p className="font-semibold tabular-nums">
-                        {Math.round(pendingPer100.carbs)}g
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-muted-foreground">Fat</p>
-                      <p className="font-semibold tabular-nums">
-                        {Math.round(pendingPer100.fat)}g
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Field className="mt-5">
-                  <FieldLabel htmlFor="portion-grams-input">How many grams did you eat?</FieldLabel>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-12 min-w-12 rounded-2xl"
-                      aria-label="Decrease 10 grams"
-                      onClick={() => adjustPortion(-10)}
-                    >
-                      <Minus className="size-4" />
-                    </Button>
-                    <Input
-                      id="portion-grams-input"
-                      type="number"
-                      min={1}
-                      inputMode="decimal"
-                      autoFocus
-                      className="min-h-12 flex-1 rounded-2xl text-center text-xl font-semibold"
-                      value={portionGrams}
-                      onChange={(e) => setPortionGrams(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (hasValidPortion && !isAddingFood) confirmPendingFood();
-                        }
-                      }}
-                    />
-                    <span className="text-sm font-medium text-muted-foreground">g</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-12 min-w-12 rounded-2xl"
-                      aria-label="Increase 10 grams"
-                      onClick={() => adjustPortion(10)}
-                    >
-                      <Plus className="size-4" />
-                    </Button>
-                  </div>
-                </Field>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {[
-                    { label: '-25', delta: -25 },
-                    { label: '-10', delta: -10 },
-                    { label: '+10', delta: 10 },
-                    { label: '+25', delta: 25 },
-                  ].map((btn) => (
-                    <button
-                      key={btn.label}
-                      type="button"
-                      className="min-h-10 rounded-full border border-border px-3 text-sm font-semibold hover:bg-muted"
-                      onClick={() => adjustPortion(btn.delta)}
-                    >
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(pendingUnitGrams
-                    ? [
-                        { label: '1 serve', value: pendingUnitGrams },
-                        { label: '2 serve', value: pendingUnitGrams * 2 },
-                        { label: '50g', value: 50 },
-                        { label: '100g', value: 100 },
-                        { label: '150g', value: 150 },
-                        { label: '200g', value: 200 },
-                      ]
-                    : [
-                        { label: '50g', value: 50 },
-                        { label: '100g', value: 100 },
-                        { label: '150g', value: 150 },
-                        { label: '200g', value: 200 },
-                        { label: '250g', value: 250 },
-                      ]
-                  ).map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      className={cn(
-                        'min-h-10 rounded-full border px-3.5 text-sm font-semibold',
-                        Number(portionGrams) === chip.value
-                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-800 dark:text-emerald-200'
-                          : 'border-border hover:bg-muted',
-                      )}
-                      onClick={() => setPortionGrams(String(chip.value))}
-                    >
-                      {chip.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Live preview */}
-                <div className="mt-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <p className="text-xs font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-300">
-                    Preview · {hasValidPortion ? `${portionGrams}g` : '—'}
-                  </p>
-                  {pendingMacros ? (
-                    <div className="mt-2 grid grid-cols-4 gap-2 text-center">
-                      <div>
-                        <p className="text-[11px] text-muted-foreground">Calories</p>
-                        <p className="text-lg font-semibold tabular-nums">
-                          {Math.round(pendingMacros.calories)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] text-muted-foreground">Protein</p>
-                        <p className="text-lg font-semibold tabular-nums">
-                          {Math.round(pendingMacros.protein * 10) / 10}g
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] text-muted-foreground">Carbs</p>
-                        <p className="text-lg font-semibold tabular-nums">
-                          {Math.round(pendingMacros.carbs * 10) / 10}g
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] text-muted-foreground">Fat</p>
-                        <p className="text-lg font-semibold tabular-nums">
-                          {Math.round(pendingMacros.fat * 10) / 10}g
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">Enter grams to preview</p>
-                  )}
-                </div>
-
-                {/* Meal picker */}
-                <div className="mt-5">
-                  <p className="text-sm font-medium">Meal</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {MEAL_UI.map((m) => (
-                      <button
-                        key={m.value}
-                        type="button"
-                        className={cn(
-                          'min-h-11 rounded-2xl border px-2 text-sm font-semibold',
-                          pendingMealSlot === m.value
-                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
-                            : 'border-border hover:bg-muted',
-                        )}
-                        onClick={() => setPendingMealSlot(m.value)}
-                      >
-                        <span aria-hidden>{m.emoji} </span>
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  className="mt-6 min-h-14 w-full rounded-2xl bg-emerald-600 text-base hover:bg-emerald-700"
-                  disabled={!hasValidPortion || isAddingFood}
-                  onClick={confirmPendingFood}
-                >
-                  <Plus className="size-5" />
-                  {isAddingFood
-                    ? 'Adding…'
-                    : hasValidPortion
-                      ? `Add Food · ${portionGrams}g`
-                      : 'Enter grams to add'}
-                </Button>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
 
       {/* Edit drawer portaled so it isn't clipped by motion transforms */}
       {typeof document !== 'undefined' && editingIndex != null

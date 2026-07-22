@@ -12,7 +12,6 @@ import {
   type MembershipPlan,
 } from '@smart-gym/shared';
 import {
-  useDailyAttendanceCode,
   useDietLog,
   useDietLogDates,
   useGymAttendanceToday,
@@ -41,7 +40,6 @@ export function MemberHome() {
   const gymId = gym?.id ?? membership?.gym_id;
   const today = getTodayYmd();
 
-  const codeQuery = useDailyAttendanceCode(client, gymId, Boolean(gymId));
   const dietQuery = useDietLog(client, userId, today);
   const dietDatesQuery = useDietLogDates(client, userId);
   const paymentsQuery = useMemberPayments(client, userId);
@@ -94,26 +92,14 @@ export function MemberHome() {
   const crowdLevel = calculateCrowdLevel(liveCount, (activeMembersQuery.data ?? []).length);
   const partnerUsed = partnerAllowanceQuery.data?.visits_used ?? 0;
   const partnerLimit = partnerAllowanceQuery.data?.monthly_limit ?? 3;
-  const partnerRemaining = partnerAllowanceQuery.data?.visits_remaining ?? Math.max(partnerLimit - partnerUsed, 0);
+  const partnerRemaining =
+    partnerAllowanceQuery.data?.visits_remaining ?? Math.max(partnerLimit - partnerUsed, 0);
 
   return (
     <PageContainer>
       <PageHeader
         title={`Hi${profile?.first_name ? `, ${profile.first_name}` : ''}`}
         description={`${gym?.name ?? 'Your gym'}${membership?.ends_at ? ` · ${getMembershipExpiryLine(membership.ends_at)}` : ''}`}
-        actions={
-          <>
-            <Link href="/member/attendance" className={cn(buttonVariants({ size: 'lg' }), 'min-h-11')}>
-              Attendance
-            </Link>
-            <Link
-              href="/member/diet"
-              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'min-h-11')}
-            >
-              Log diet
-            </Link>
-          </>
-        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -133,30 +119,21 @@ export function MemberHome() {
           }
         />
         <StatCard label="Plan" value={planLabel(membership?.plan)} />
-        <StatCard label="Fitness score" value={fitnessScore} hint={`Streak ${streakCurrent} · best ${streakBest}`} />
+        <StatCard
+          label="Fitness score"
+          value={fitnessScore}
+          hint={`Streak ${streakCurrent} · best ${streakBest}`}
+        />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Today’s attendance code" description="Show this at the desk">
-          <p className="rounded-lg border border-border bg-muted/40 py-6 text-center font-mono text-3xl font-semibold tracking-[0.35em] text-primary sm:text-4xl">
-            {codeQuery.isLoading ? '····' : codeQuery.data || '————'}
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            {codeQuery.data
-              ? 'Valid for today only.'
-              : 'Code will appear when your gym is available.'}
-          </p>
-        </SectionCard>
-
-        <SectionCard title="Gym crowd" description={`${gym?.name ?? 'Gym'} right now`}>
-          <CrowdMeter
-            compact
-            level={crowdLevel}
-            liveCount={liveCount}
-            activeCount={(activeMembersQuery.data ?? []).length}
-          />
-        </SectionCard>
-      </div>
+      <SectionCard title="Gym crowd" description={`${gym?.name ?? 'Gym'} right now`}>
+        <CrowdMeter
+          compact
+          level={crowdLevel}
+          liveCount={liveCount}
+          activeCount={(activeMembersQuery.data ?? []).length}
+        />
+      </SectionCard>
 
       <SectionCard title="Multi-Gym Access" description="Partner gym visits this calendar month">
         <p className="text-sm font-medium">
@@ -175,31 +152,13 @@ export function MemberHome() {
         </div>
         <Link
           href="/member/partner-gyms"
-          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-4 inline-flex min-h-11')}
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'lg' }),
+            'mt-4 inline-flex min-h-11',
+          )}
         >
           View Partner Gyms
         </Link>
-      </SectionCard>
-
-      <SectionCard title="Quick links">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { href: '/member/payments', label: 'Payments' },
-            { href: '/member/league', label: 'League' },
-            { href: '/member/friends', label: 'Friends' },
-            { href: '/member/partner-gyms', label: 'Partner gyms' },
-            { href: '/member/notifications', label: 'Alerts' },
-            { href: '/member/settings', label: 'Profile settings' },
-          ].map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'min-h-11 justify-start')}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
       </SectionCard>
     </PageContainer>
   );

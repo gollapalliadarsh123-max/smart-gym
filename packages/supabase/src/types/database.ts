@@ -917,19 +917,19 @@ export type Database = {
       };
       ensure_active_gym_qr: {
         Args: { p_gym_id: string };
-        Returns: Database['public']['Tables']['gym_qr_codes']['Row'];
+        Returns: Json;
       };
       get_active_gym_qr: {
         Args: { p_gym_id: string };
-        Returns: Database['public']['Tables']['gym_qr_codes']['Row'];
+        Returns: Json;
       };
       regenerate_gym_qr: {
         Args: { p_gym_id: string; p_reason?: string };
-        Returns: Database['public']['Tables']['gym_qr_codes']['Row'];
+        Returns: Json;
       };
       list_gym_qr_history: {
         Args: { p_gym_id: string };
-        Returns: Database['public']['Tables']['gym_qr_codes']['Row'][];
+        Returns: Json;
       };
       reverse_partner_visit: {
         Args: { p_visit_id: string; p_reason?: string };

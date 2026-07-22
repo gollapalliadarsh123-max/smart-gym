@@ -38,14 +38,13 @@ No new environment variables are required. Uses the existing Supabase project.
 
 1. Approve a member at Gym A (home gym).
 2. Member opens home → **Multi-Gym Access** card and **Partner gyms**.
-3. Check in at Gym B via **Scan Gym QR** on Attendance (or open `/checkin/<token>`).
+3. Check in at Gym B via Partner gyms page or `/check-in?gym=<gym-b-id>`.
 4. Expect success messages with remaining visits (2 then 1 then 0).
 5. Fourth partner check-in in the same calendar month must fail with the monthly limit message.
 6. Home-gym attendance at Gym A must not reduce partner visits.
 7. Same-day second check-in at the same partner gym must fail.
 8. Suspend partnership, then partner check-in must fail.
 9. Owner reverses an approved partner visit on Attendance; remaining allowance increases.
-10. Regenerate QR on Gym A; old printed QR must fail with “QR expired”.
 
 ## Isolation checks
 
@@ -58,4 +57,4 @@ No new environment variables are required. Uses the existing Supabase project.
 npm test --workspace=@smart-gym/shared
 ```
 
-Covers remaining-visit math for the 3/month rule and QR token parsing.
+Covers remaining-visit math for the 3/month rule.

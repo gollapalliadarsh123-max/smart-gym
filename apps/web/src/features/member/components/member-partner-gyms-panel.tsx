@@ -75,12 +75,6 @@ export function MemberPartnerGymsPanel() {
             style={{ width: `${Math.min(100, (used / Math.max(limit, 1)) * 100)}%` }}
           />
         </div>
-        <Link
-          href="/member/attendance"
-          className={cn(buttonVariants({ size: 'lg' }), 'mt-4 inline-flex min-h-11')}
-        >
-          Scan Gym QR
-        </Link>
       </SectionCard>
 
       <SectionCard title="Available partners" description="Active partnerships from your home gym">
@@ -176,12 +170,6 @@ function PartnerGymRow({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/member/attendance"
-            className={cn(buttonVariants({ size: 'sm' }), 'inline-flex')}
-          >
-            Scan QR
-          </Link>
           <a
             href={mapsUrl}
             target="_blank"

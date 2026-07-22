@@ -1,13 +1,13 @@
 -- Secure gym QR tokens + scan audit log for multi-gym check-in.
 -- QR payloads contain only a random token (never gym/user IDs).
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
 
-create table public.gym_qr_codes (
+create table if not exists public.gym_qr_codes (
   id uuid primary key default gen_random_uuid(),
   gym_id uuid not null references public.gyms (id) on delete cascade,
   token text not null,
@@ -21,13 +21,13 @@ create table public.gym_qr_codes (
   constraint gym_qr_codes_token_format check (token ~ '^[a-f0-9]{64}$')
 );
 
-create unique index gym_qr_codes_token_uidx on public.gym_qr_codes (token);
-create unique index gym_qr_codes_one_active_per_gym
+create unique index if not exists gym_qr_codes_token_uidx on public.gym_qr_codes (token);
+create unique index if not exists gym_qr_codes_one_active_per_gym
   on public.gym_qr_codes (gym_id)
   where status = 'active';
-create index gym_qr_codes_gym_idx on public.gym_qr_codes (gym_id, created_at desc);
+create index if not exists gym_qr_codes_gym_idx on public.gym_qr_codes (gym_id, created_at desc);
 
-create table public.qr_scan_logs (
+create table if not exists public.qr_scan_logs (
   id uuid primary key default gen_random_uuid(),
   qr_code_id uuid references public.gym_qr_codes (id) on delete set null,
   gym_id uuid references public.gyms (id) on delete set null,
@@ -42,14 +42,15 @@ create table public.qr_scan_logs (
   created_at timestamptz not null default now()
 );
 
-create index qr_scan_logs_gym_idx on public.qr_scan_logs (gym_id, created_at desc);
-create index qr_scan_logs_user_idx on public.qr_scan_logs (scanned_by, created_at desc);
-create index qr_scan_logs_qr_idx on public.qr_scan_logs (qr_code_id, created_at desc);
+create index if not exists qr_scan_logs_gym_idx on public.qr_scan_logs (gym_id, created_at desc);
+create index if not exists qr_scan_logs_user_idx on public.qr_scan_logs (scanned_by, created_at desc);
+create index if not exists qr_scan_logs_qr_idx on public.qr_scan_logs (qr_code_id, created_at desc);
 
 alter table public.gym_qr_codes enable row level security;
 alter table public.qr_scan_logs enable row level security;
 
 -- Owners/staff can read QR metadata for their gyms (token included so they can print QR).
+drop policy if exists gym_qr_codes_select on public.gym_qr_codes;
 create policy gym_qr_codes_select on public.gym_qr_codes for select
   using (
     public.is_platform_admin()
@@ -58,11 +59,18 @@ create policy gym_qr_codes_select on public.gym_qr_codes for select
   );
 
 -- No direct client inserts/updates/deletes — RPCs only
+drop policy if exists gym_qr_codes_no_insert on public.gym_qr_codes;
+drop policy if exists gym_qr_codes_no_update on public.gym_qr_codes;
+drop policy if exists gym_qr_codes_no_delete on public.gym_qr_codes;
 create policy gym_qr_codes_no_insert on public.gym_qr_codes for insert with check (false);
 create policy gym_qr_codes_no_update on public.gym_qr_codes for update using (false);
 create policy gym_qr_codes_no_delete on public.gym_qr_codes for delete using (false);
 
 -- Scan logs: owners/staff of involved gym, or the member who scanned
+drop policy if exists qr_scan_logs_select on public.qr_scan_logs;
+drop policy if exists qr_scan_logs_no_insert on public.qr_scan_logs;
+drop policy if exists qr_scan_logs_no_update on public.qr_scan_logs;
+drop policy if exists qr_scan_logs_no_delete on public.qr_scan_logs;
 create policy qr_scan_logs_select on public.qr_scan_logs for select
   using (
     public.is_platform_admin()
@@ -82,9 +90,10 @@ create or replace function public.generate_gym_qr_token()
 returns text
 language plpgsql
 volatile
+set search_path = public, extensions
 as $$
 begin
-  return encode(gen_random_bytes(32), 'hex');
+  return encode(extensions.gen_random_bytes(32), 'hex');
 end;
 $$;
 
@@ -92,8 +101,12 @@ create or replace function public.fingerprint_qr_token(p_token text)
 returns text
 language sql
 immutable
+set search_path = public, extensions
 as $$
-  select encode(digest(coalesce(p_token, ''), 'sha256'), 'hex');
+  select encode(
+    extensions.digest(convert_to(coalesce(p_token, ''), 'UTF8'), 'sha256'::text),
+    'hex'
+  );
 $$;
 
 create or replace function public.log_qr_scan(
@@ -450,7 +463,7 @@ $$;
 
 -- Bootstrap active QR for every existing gym
 insert into public.gym_qr_codes (gym_id, token, status, created_by)
-select g.id, encode(gen_random_bytes(32), 'hex'), 'active', g.owner_id
+select g.id, encode(extensions.gen_random_bytes(32), 'hex'), 'active', g.owner_id
 from public.gyms g
 where not exists (
   select 1 from public.gym_qr_codes q where q.gym_id = g.id and q.status = 'active'

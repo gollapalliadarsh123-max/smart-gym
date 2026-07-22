@@ -1,19 +1,60 @@
 import { buildGymCheckInPath, buildGymCheckInUrl, extractQrToken } from '@smart-gym/shared';
 import type { TypedSupabaseClient } from '../client/browser';
 import type { QrCheckInResult, Tables } from '../types/database';
-import { assertData } from '../lib/errors';
 
 export type GymQrCode = Tables<'gym_qr_codes'>;
 export type QrScanLog = Tables<'qr_scan_logs'>;
 
 export { buildGymCheckInPath, buildGymCheckInUrl, extractQrToken };
 
+function asGymQr(data: unknown): GymQrCode | null {
+  let value: unknown = data;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Partial<GymQrCode>;
+  if (!row.id || !row.gym_id || !row.token) return null;
+  return row as GymQrCode;
+}
+
+function asGymQrList(data: unknown): GymQrCode[] {
+  let value: unknown = data;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(value)) return [];
+  return value.map(asGymQr).filter((row): row is GymQrCode => row !== null);
+}
+
+/** Prefer table read; create via RPC if missing. */
 export async function getActiveGymQr(
   client: TypedSupabaseClient,
   gymId: string,
 ): Promise<GymQrCode> {
-  const { data, error } = await client.rpc('get_active_gym_qr', { p_gym_id: gymId });
-  return assertData(data, error, 'Failed to load gym QR');
+  const { data: existing, error: selectError } = await client
+    .from('gym_qr_codes')
+    .select('*')
+    .eq('gym_id', gymId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (selectError) throw new Error(selectError.message);
+  if (existing) return existing;
+
+  const { data, error } = await client.rpc('ensure_active_gym_qr', { p_gym_id: gymId });
+  if (error) throw new Error(error.message);
+  const row = asGymQr(data);
+  if (!row) throw new Error('Failed to create gym QR');
+  return row;
 }
 
 export async function regenerateGymQr(
@@ -25,16 +66,30 @@ export async function regenerateGymQr(
     p_gym_id: gymId,
     p_reason: reason,
   });
-  return assertData(data, error, 'Failed to regenerate gym QR');
+  if (error) throw new Error(error.message);
+  const row = asGymQr(data);
+  if (row) return row;
+
+  // Fallback: read active row after regenerate
+  return getActiveGymQr(client, gymId);
 }
 
 export async function listGymQrHistory(
   client: TypedSupabaseClient,
   gymId: string,
 ): Promise<GymQrCode[]> {
+  const { data: fromTable, error: tableError } = await client
+    .from('gym_qr_codes')
+    .select('*')
+    .eq('gym_id', gymId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (!tableError && fromTable) return fromTable;
+
   const { data, error } = await client.rpc('list_gym_qr_history', { p_gym_id: gymId });
   if (error) throw new Error(error.message);
-  return (data as GymQrCode[]) ?? [];
+  return asGymQrList(data);
 }
 
 export async function checkInByQrToken(

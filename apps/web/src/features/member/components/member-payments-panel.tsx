@@ -1,18 +1,8 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import {
   Banknote,
   CalendarDays,
@@ -21,24 +11,17 @@ import {
   Download,
   Dumbbell,
   Eye,
-  HelpCircle,
   Mail,
   Phone,
   Printer,
   QrCode,
   RefreshCw,
-  Search,
   Wallet,
   X,
 } from 'lucide-react';
 import {
-  MEMBERSHIP_PLANS,
   MEMBERSHIP_PLAN_DAYS,
-  MEMBERSHIP_PLAN_LABELS,
-  PAYMENT_MODES,
-  PAYMENT_STATUSES,
   PAYMENT_STATUS_LABELS,
-  addDaysToYmd,
   calculateDaysLeft,
   getMembershipExpiryLine,
   getPlanLabel,
@@ -49,14 +32,9 @@ import {
 import { sumPaidAmount, useMemberPayments, type Tables } from '@smart-gym/supabase';
 import { useMemberContext } from '@/features/member/components/member-provider';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Field, FieldLabel } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 
 type Payment = Tables<'payments'>;
-type ChartRange = 'day' | 'month' | 'year';
-
-const PAYMENT_METHODS = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Online', ...PAYMENT_MODES] as const;
 
 function GlassCard({
   children,
@@ -232,77 +210,22 @@ function openReceipt(html: string, action: 'view' | 'print' | 'download', filena
   }
 }
 
-function gymPriceForPlan(
-  gym: {
-    price_1_month: number;
-    price_3_month: number;
-    price_6_month: number;
-    price_12_month: number;
-  } | null,
-  plan: MembershipPlan | null | undefined,
-): number {
-  if (!gym || !plan) return 0;
-  switch (plan) {
-    case '1_month':
-      return Number(gym.price_1_month) || 0;
-    case '3_month':
-      return Number(gym.price_3_month) || 0;
-    case '6_month':
-      return Number(gym.price_6_month) || 0;
-    case '12_month':
-      return Number(gym.price_12_month) || 0;
-  }
 }
-
-const selectClass =
-  'min-h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/30';
 
 export function MemberPaymentsPanel() {
   const { client, userId, profile, gym, membership } = useMemberContext();
   const today = getTodayYmd();
 
-  const [search, setSearch] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [status, setStatus] = useState<PaymentStatus | 'all'>('all');
-  const [methodFilter, setMethodFilter] = useState<string>('all');
-  const [planFilter, setPlanFilter] = useState<MembershipPlan | 'all'>('all');
-  const [applied, setApplied] = useState({
-    search: '',
-    fromDate: '',
-    toDate: '',
-    status: 'all' as PaymentStatus | 'all',
-    method: 'all',
-    plan: 'all' as MembershipPlan | 'all',
-  });
-  const [chartRange, setChartRange] = useState<ChartRange>('month');
   const [qrOpen, setQrOpen] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
 
-  const kpiPaymentsQuery = useMemberPayments(client, userId, {
+  const paymentsQuery = useMemberPayments(client, userId, {
     gymId: gym?.id,
     limit: 200,
   });
-  const paymentsQuery = useMemberPayments(client, userId, {
-    gymId: gym?.id,
-    limit: 100,
-    search: applied.search || undefined,
-    fromDate: applied.fromDate || undefined,
-    toDate: applied.toDate || undefined,
-    status: applied.status,
-  });
 
-  const allPayments = kpiPaymentsQuery.data ?? [];
-  const payments = useMemo(() => {
-    return (paymentsQuery.data ?? []).filter((p) => {
-      if (applied.method !== 'all' && p.payment_mode !== applied.method) return false;
-      if (applied.plan !== 'all' && p.plan !== applied.plan) return false;
-      return true;
-    });
-  }, [paymentsQuery.data, applied.method, applied.plan]);
-
-  const totalPaidAll = sumPaidAmount(allPayments);
+  const payments = paymentsQuery.data ?? [];
+  const totalPaidAll = sumPaidAmount(payments);
   const endsYmd = toYmd(membership?.ends_at);
   const startsYmd = toYmd(membership?.starts_at);
   const daysLeft = endsYmd ? calculateDaysLeft(endsYmd, today) : null;
@@ -330,9 +253,6 @@ export function MemberPaymentsPanel() {
     if (daysFromStart == null || daysFromStart < 0) return null;
     return daysFromStart + 1;
   }, [startsYmd, today]);
-
-  const estimatedRenewal = gymPriceForPlan(gym, membership?.plan as MembershipPlan | undefined);
-  const showRenewalCard = membership != null && daysLeft != null && daysLeft >= 0 && daysLeft < 30;
 
   const memberLabel = displayName(profile);
   const membershipId = membership?.id
@@ -404,69 +324,6 @@ export function MemberPaymentsPanel() {
     };
   }, [startsYmd, endsYmd, today]);
 
-  const chartData = useMemo(() => {
-    if (chartRange === 'day') {
-      const days: { key: string; label: string; amount: number }[] = [];
-      for (let i = 13; i >= 0; i--) {
-        const ymd = addDaysToYmd(today, -i);
-        const [y, m, d] = ymd.split('-').map(Number);
-        const label =
-          y && m && d
-            ? new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-            : ymd;
-        days.push({ key: ymd, label, amount: 0 });
-      }
-      const index = new Map(days.map((d, i) => [d.key, i]));
-      for (const p of allPayments) {
-        if (p.status !== 'paid' || !p.paid_at) continue;
-        const ymd = p.paid_at.slice(0, 10);
-        const i = index.get(ymd);
-        if (i === undefined) continue;
-        days[i]!.amount += Number(p.amount || 0);
-      }
-      return days;
-    }
-
-    if (chartRange === 'year') {
-      const year = new Date().getFullYear();
-      const months = Array.from({ length: 12 }, (_, month) => ({
-        key: `${year}-${month}`,
-        label: new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short' }),
-        amount: 0,
-      }));
-      for (const p of allPayments) {
-        if (p.status !== 'paid' || !p.paid_at) continue;
-        const at = new Date(p.paid_at);
-        if (at.getFullYear() !== year) continue;
-        months[at.getMonth()]!.amount += Number(p.amount || 0);
-      }
-      return months;
-    }
-
-    // month view: last 6 months
-    const points: { key: string; label: string; amount: number }[] = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
-      points.push({
-        key,
-        label: d.toLocaleDateString(undefined, { month: 'short' }),
-        amount: 0,
-      });
-    }
-    const index = new Map(points.map((p, i) => [p.key, i]));
-    for (const p of allPayments) {
-      if (p.status !== 'paid' || !p.paid_at) continue;
-      const at = new Date(p.paid_at);
-      const key = `${at.getFullYear()}-${at.getMonth()}`;
-      const i = index.get(key);
-      if (i === undefined) continue;
-      points[i]!.amount += Number(p.amount || 0);
-    }
-    return points;
-  }, [allPayments, chartRange, today]);
-
   function receiptHtml(payment: Payment) {
     return buildReceiptHtml({
       gymName: gym?.name ?? 'Smart Gym',
@@ -483,19 +340,9 @@ export function MemberPaymentsPanel() {
     }
   }
 
-  const latestPaid = allPayments.find((p) => p.status === 'paid') ?? allPayments[0];
-
-  const uniqueMethods = useMemo(() => {
-    const set = new Set<string>([...PAYMENT_METHODS]);
-    for (const p of allPayments) {
-      if (p.payment_mode) set.add(p.payment_mode);
-    }
-    return [...set];
-  }, [allPayments]);
-
   return (
     <motion.div
-      className="mx-auto w-full max-w-6xl space-y-6 pb-24 sm:space-y-8 lg:pb-8"
+      className="mx-auto w-full max-w-6xl space-y-6 pb-8 sm:space-y-8"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
@@ -686,297 +533,70 @@ export function MemberPaymentsPanel() {
         </div>
       </div>
 
-      {/* Timeline + renewal */}
-      <div className="grid gap-4 lg:grid-cols-5">
-        <GlassCard className="p-5 sm:p-6 lg:col-span-3">
-          <h2 className="text-base font-semibold tracking-tight">Membership Timeline</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Where you are in this cycle</p>
-
-          <div className="relative mt-10 px-2 pb-2">
-            <div className="absolute top-3 right-4 left-4 h-1.5 rounded-full bg-muted" />
-            <motion.div
-              className="absolute top-3 left-4 h-1.5 rounded-full bg-emerald-500"
-              initial={{ width: 0 }}
-              animate={{
-                width: `calc((100% - 2rem) * ${timeline.progress / 100})`,
-              }}
-              transition={{ duration: 0.8 }}
-            />
-            <div className="relative h-24">
-              {/* Started */}
-              <div className="absolute top-0 left-0 flex max-w-[34%] flex-col items-start">
-                <span
-                  className={cn(
-                    'size-7 rounded-full border-4 border-background shadow',
-                    timeline.mergeTodayWithStart
-                      ? 'bg-emerald-500'
-                      : 'bg-slate-300 dark:bg-slate-600',
-                  )}
-                />
-                <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  {timeline.mergeTodayWithStart
-                    ? timeline.beforeStart
-                      ? 'Starts'
-                      : 'Started · Today'
-                    : 'Started'}
-                </p>
-                <p className="mt-1 text-sm font-medium leading-snug">{timeline.startedLabel}</p>
-              </div>
-
-              {/* Today — only when not stacked on start/end */}
-              {timeline.showToday ? (
-                <div
-                  className="absolute top-0 flex w-[28%] max-w-[7.5rem] -translate-x-1/2 flex-col items-center text-center"
-                  style={{ left: `calc(1rem + (100% - 2rem) * ${timeline.todayLeftPct / 100})` }}
-                >
-                  <span className="size-7 rounded-full border-4 border-background bg-emerald-500 shadow" />
-                  <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                    Today
-                  </p>
-                  <p className="mt-1 text-sm font-medium leading-snug">{formatYmd(today)}</p>
-                </div>
-              ) : null}
-
-              {/* Renewal */}
-              <div className="absolute top-0 right-0 flex max-w-[34%] flex-col items-end text-right">
-                <span
-                  className={cn(
-                    'size-7 rounded-full border-4 border-background shadow',
-                    timeline.mergeTodayWithEnd
-                      ? 'bg-emerald-500'
-                      : 'bg-slate-300 dark:bg-slate-600',
-                  )}
-                />
-                <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  {timeline.mergeTodayWithEnd ? 'Renewal · Today' : 'Renewal'}
-                </p>
-                <p className="mt-1 text-sm font-medium leading-snug">{formatYmd(endsYmd)}</p>
-              </div>
-            </div>
-          </div>
-        </GlassCard>
-
-        {showRenewalCard ? (
-          <GlassCard className="border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-transparent p-5 sm:p-6 lg:col-span-2">
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Renewal reminder</p>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">
-              {daysLeft} <span className="text-lg font-medium">days left</span>
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Renew before {formatYmd(endsYmd)} to keep uninterrupted access.
-            </p>
-            <p className="mt-3 text-sm">
-              Estimated renewal:{' '}
-              <span className="font-semibold">{formatMoney(estimatedRenewal)}</span>
-              {membership?.plan ? ` · ${getPlanLabel(membership.plan)}` : ''}
-            </p>
-            <Button
-              type="button"
-              className="mt-5 min-h-12 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                if (gym?.contact_email) {
-                  window.location.href = `mailto:${gym.contact_email}?subject=${encodeURIComponent('Membership renewal')}`;
-                } else if (gym?.phone) {
-                  window.location.href = `tel:${gym.phone}`;
-                } else {
-                  setBanner('Contact reception to renew your membership.');
-                }
-              }}
-            >
-              <RefreshCw className="size-4" />
-              Renew Membership
-            </Button>
-          </GlassCard>
-        ) : (
-          <GlassCard className="flex flex-col justify-center p-5 sm:p-6 lg:col-span-2">
-            <p className="text-sm font-medium text-muted-foreground">Renewal status</p>
-            <p className="mt-2 text-lg font-semibold">
-              {daysLeft == null
-                ? 'No renewal date set'
-                : daysLeft < 0
-                  ? 'Membership expired — renew to continue'
-                  : 'You’re in good standing'}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Renewal reminders appear when fewer than 30 days remain.
-            </p>
-          </GlassCard>
-        )}
-      </div>
-
-      {/* Chart */}
+      {/* Timeline */}
       <GlassCard className="p-5 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold tracking-tight">Payment Statistics</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Spending over time · total {formatMoney(totalPaidAll)}
-            </p>
-          </div>
-          <div className="inline-flex rounded-full bg-muted p-1" role="tablist">
-            {(['day', 'month', 'year'] as ChartRange[]).map((r) => (
-              <button
-                key={r}
-                type="button"
-                role="tab"
-                aria-selected={chartRange === r}
-                onClick={() => setChartRange(r)}
-                className={cn(
-                  'min-h-9 rounded-full px-3.5 text-sm font-semibold capitalize',
-                  chartRange === r
-                    ? 'bg-background text-emerald-700 shadow-sm dark:text-emerald-300'
-                    : 'text-muted-foreground',
-                )}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mt-4 h-56 w-full sm:h-64">
-          {chartData.every((d) => d.amount === 0) ? (
-            <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border text-sm text-muted-foreground">
-              No payment activity in this range yet
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="memberPayFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#059669" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#33415533" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  width={44}
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v: number) => (v >= 1000 ? `₹${(v / 1000).toFixed(0)}k` : `₹${v}`)}
-                />
-                <Tooltip
-                  formatter={(value) => [formatMoney(Number(value ?? 0)), 'Spent']}
-                  contentStyle={{ borderRadius: 12 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="amount"
-                  stroke="#059669"
-                  fill="url(#memberPayFill)"
-                  strokeWidth={2}
-                  name="Spent"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </GlassCard>
+        <h2 className="text-base font-semibold tracking-tight">Membership Timeline</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">Where you are in this cycle</p>
 
-      {/* Filters */}
-      <GlassCard className="p-4 sm:p-5">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setApplied({
-              search,
-              fromDate,
-              toDate,
-              status,
-              method: methodFilter,
-              plan: planFilter,
-            });
-          }}
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
-        >
-          <Field className="xl:col-span-2">
-            <FieldLabel>Search</FieldLabel>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
+        <div className="relative mt-10 px-2 pb-2">
+          <div className="absolute top-3 right-4 left-4 h-1.5 rounded-full bg-muted" />
+          <motion.div
+            className="absolute top-3 left-4 h-1.5 rounded-full bg-emerald-500"
+            initial={{ width: 0 }}
+            animate={{
+              width: `calc((100% - 2rem) * ${timeline.progress / 100})`,
+            }}
+            transition={{ duration: 0.8 }}
+          />
+          <div className="relative h-24">
+            <div className="absolute top-0 left-0 flex max-w-[34%] flex-col items-start">
+              <span
+                className={cn(
+                  'size-7 rounded-full border-4 border-background shadow',
+                  timeline.mergeTodayWithStart
+                    ? 'bg-emerald-500'
+                    : 'bg-slate-300 dark:bg-slate-600',
+                )}
               />
-              <Input
-                placeholder="Mode, plan, amount…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="min-h-11 rounded-2xl pl-10"
-              />
+              <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                {timeline.mergeTodayWithStart
+                  ? timeline.beforeStart
+                    ? 'Starts'
+                    : 'Started · Today'
+                  : 'Started'}
+              </p>
+              <p className="mt-1 text-sm font-medium leading-snug">{timeline.startedLabel}</p>
             </div>
-          </Field>
-          <Field>
-            <FieldLabel>From</FieldLabel>
-            <Input
-              type="date"
-              className="min-h-11 rounded-2xl"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>To</FieldLabel>
-            <Input
-              type="date"
-              className="min-h-11 rounded-2xl"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>Method</FieldLabel>
-            <select
-              className={selectClass}
-              value={methodFilter}
-              onChange={(e) => setMethodFilter(e.target.value)}
-            >
-              <option value="all">All methods</option>
-              {uniqueMethods.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field>
-            <FieldLabel>Status</FieldLabel>
-            <select
-              className={selectClass}
-              value={status}
-              onChange={(e) => setStatus(e.target.value as PaymentStatus | 'all')}
-            >
-              <option value="all">All statuses</option>
-              {PAYMENT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {PAYMENT_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field>
-            <FieldLabel>Plan</FieldLabel>
-            <select
-              className={selectClass}
-              value={planFilter}
-              onChange={(e) => setPlanFilter(e.target.value as MembershipPlan | 'all')}
-            >
-              <option value="all">All plans</option>
-              {MEMBERSHIP_PLANS.map((plan) => (
-                <option key={plan} value={plan}>
-                  {MEMBERSHIP_PLAN_LABELS[plan]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="flex items-end sm:col-span-2 xl:col-span-6">
-            <Button type="submit" variant="outline" className="min-h-11 rounded-2xl">
-              Apply filters
-            </Button>
-            <p className="ml-3 text-sm text-muted-foreground">
-              {formatMoney(sumPaidAmount(payments))} in results
-            </p>
+
+            {timeline.showToday ? (
+              <div
+                className="absolute top-0 flex w-[28%] max-w-[7.5rem] -translate-x-1/2 flex-col items-center text-center"
+                style={{ left: `calc(1rem + (100% - 2rem) * ${timeline.todayLeftPct / 100})` }}
+              >
+                <span className="size-7 rounded-full border-4 border-background bg-emerald-500 shadow" />
+                <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Today
+                </p>
+                <p className="mt-1 text-sm font-medium leading-snug">{formatYmd(today)}</p>
+              </div>
+            ) : null}
+
+            <div className="absolute top-0 right-0 flex max-w-[34%] flex-col items-end text-right">
+              <span
+                className={cn(
+                  'size-7 rounded-full border-4 border-background shadow',
+                  timeline.mergeTodayWithEnd
+                    ? 'bg-emerald-500'
+                    : 'bg-slate-300 dark:bg-slate-600',
+                )}
+              />
+              <p className="mt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                {timeline.mergeTodayWithEnd ? 'Ends · Today' : 'Ends'}
+              </p>
+              <p className="mt-1 text-sm font-medium leading-snug">{formatYmd(endsYmd)}</p>
+            </div>
           </div>
-        </form>
+        </div>
       </GlassCard>
 
       {/* History */}
@@ -996,12 +616,10 @@ export function MemberPaymentsPanel() {
           <GlassCard className="flex flex-col items-center px-6 py-14 text-center">
             <Banknote className="size-10 text-muted-foreground/40" aria-hidden />
             <p className="mt-4 text-base font-semibold">
-              {allPayments.length === 0 ? 'No payment history' : 'No search results'}
+              No payment history
             </p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              {allPayments.length === 0
-                ? 'When you pay at the desk, receipts will appear here.'
-                : 'Try adjusting filters or clearing the date range.'}
+              When you pay at the desk, receipts will appear here.
             </p>
           </GlassCard>
         ) : (
@@ -1065,102 +683,6 @@ export function MemberPaymentsPanel() {
         )}
       </section>
 
-      {/* Quick actions */}
-      <section aria-label="Quick actions">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Quick Actions</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 justify-start rounded-2xl"
-            onClick={() => {
-              if (gym?.contact_email) {
-                window.location.href = `mailto:${gym.contact_email}?subject=${encodeURIComponent('Membership renewal')}`;
-              } else if (gym?.phone) {
-                window.location.href = `tel:${gym.phone}`;
-              } else {
-                setBanner('Contact reception to renew your membership.');
-              }
-            }}
-          >
-            <RefreshCw className="size-4" />
-            Renew Membership
-          </Button>
-          {gym?.phone ? (
-            <a
-              href={`tel:${gym.phone}`}
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'min-h-12 justify-start rounded-2xl',
-              )}
-            >
-              <Phone className="size-4" />
-              Contact Gym
-            </a>
-          ) : gym?.contact_email ? (
-            <a
-              href={`mailto:${gym.contact_email}`}
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'min-h-12 justify-start rounded-2xl',
-              )}
-            >
-              <Mail className="size-4" />
-              Contact Gym
-            </a>
-          ) : (
-            <Link
-              href="/member"
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'min-h-12 justify-start rounded-2xl',
-              )}
-            >
-              <Phone className="size-4" />
-              Contact Gym
-            </Link>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 justify-start rounded-2xl"
-            disabled={!latestPaid}
-            onClick={() => latestPaid && handleReceipt(latestPaid, 'download')}
-          >
-            <Download className="size-4" />
-            Download Latest Receipt
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 justify-start rounded-2xl"
-            onClick={() => setHelpOpen(true)}
-          >
-            <HelpCircle className="size-4" />
-            Payment Help
-          </Button>
-        </div>
-      </section>
-
-      {/* Sticky renew on mobile when expiring */}
-      {showRenewalCard ? (
-        <div className="fixed inset-x-0 bottom-16 z-20 border-t border-border/80 bg-background/90 p-3 backdrop-blur lg:hidden">
-          <Button
-            className="min-h-12 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-            onClick={() => {
-              if (gym?.contact_email) {
-                window.location.href = `mailto:${gym.contact_email}?subject=${encodeURIComponent('Membership renewal')}`;
-              } else if (gym?.phone) {
-                window.location.href = `tel:${gym.phone}`;
-              }
-            }}
-          >
-            <RefreshCw className="size-4" />
-            Renew Membership · {daysLeft}d left
-          </Button>
-        </div>
-      ) : null}
-
       {/* QR modal */}
       {qrOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -1192,39 +714,6 @@ export function MemberPaymentsPanel() {
             <p className="mt-2 text-xs text-muted-foreground">
               Show this at reception for membership verification.
             </p>
-          </GlassCard>
-        </div>
-      ) : null}
-
-      {/* Help modal */}
-      {helpOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-950/50"
-            aria-label="Close"
-            onClick={() => setHelpOpen(false)}
-          />
-          <GlassCard className="relative z-10 m-4 max-h-[80vh] w-full max-w-md overflow-y-auto p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Payment Help</h2>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                className="min-h-11 min-w-11"
-                aria-label="Close"
-                onClick={() => setHelpOpen(false)}
-              >
-                <X className="size-5" />
-              </Button>
-            </div>
-            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-              <li>Payments are recorded by gym staff at reception.</li>
-              <li>Use filters to find past receipts by date, method, or plan.</li>
-              <li>Download or print any receipt for your records.</li>
-              <li>For renewals or billing questions, contact the gym directly.</li>
-            </ul>
           </GlassCard>
         </div>
       ) : null}

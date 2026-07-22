@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import {
   buildGymCheckInUrl,
@@ -37,11 +37,15 @@ export function OwnerGymQrPanel() {
   const [fullscreen, setFullscreen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [origin, setOrigin] = useState('');
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
   const checkInUrl = useMemo(() => {
-    if (!qrQuery.data?.token) return '';
-    return buildGymCheckInUrl(qrQuery.data.token, origin || undefined);
+    if (!qrQuery.data?.token || !origin) return '';
+    return buildGymCheckInUrl(qrQuery.data.token, origin);
   }, [origin, qrQuery.data?.token]);
 
   async function handleRegenerate() {
@@ -98,9 +102,14 @@ export function OwnerGymQrPanel() {
         title="Gym QR Code"
         description="Members scan this code to check in. It never contains gym or member IDs — only a secure token."
       >
-        {qrQuery.isLoading ? (
+        {qrQuery.isLoading || (!checkInUrl && qrQuery.data) ? (
           <p className="text-sm text-muted-foreground">Loading QR…</p>
-        ) : !qrQuery.data ? (
+        ) : qrQuery.isError ? (
+          <p className="text-sm text-destructive">
+            {(qrQuery.error as Error).message ||
+              'Could not load gym QR. Run database migrations (npm run db:push), then refresh.'}
+          </p>
+        ) : !qrQuery.data || !checkInUrl ? (
           <p className="text-sm text-destructive">Could not load gym QR.</p>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -236,13 +245,22 @@ export function OwnerGymQrPanel() {
 export function OwnerAttendanceQrCard({ className }: { className?: string }) {
   const { client, gym } = useOwnerContext();
   const qrQuery = useActiveGymQr(client, gym?.id);
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
   const url =
-    qrQuery.data?.token && origin
-      ? buildGymCheckInUrl(qrQuery.data.token, origin)
-      : qrQuery.data?.token
-        ? buildGymCheckInUrl(qrQuery.data.token)
-        : '';
+    qrQuery.data?.token && origin ? buildGymCheckInUrl(qrQuery.data.token, origin) : '';
+
+  if (qrQuery.isError) {
+    return (
+      <div className={cn('text-sm text-destructive', className)}>
+        {(qrQuery.error as Error).message || 'QR unavailable'}
+      </div>
+    );
+  }
 
   if (!url) {
     return (

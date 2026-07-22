@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Award,
@@ -16,12 +15,9 @@ import {
   Clock,
   Copy,
   Flame,
-  HelpCircle,
   Lock,
-  Mail,
-  Moon,
-  Phone,
   ScanLine,
+  ChevronDown,
   Sparkles,
   Sunrise,
   Trophy,
@@ -43,14 +39,13 @@ import {
   useGymMembers,
   useMemberAttendanceHistory,
   useMemberAttendanceToday,
-  useSelfCheckIn,
   useCheckInByQrToken,
   type Tables,
   type QrCheckInResult,
 } from '@smart-gym/supabase';
 import { useMemberContext } from '@/features/member/components/member-provider';
 import { GymQrScanner } from '@/features/attendance/components/gym-qr-scanner';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type Attendance = Tables<'attendance'>;
@@ -208,27 +203,27 @@ export function MemberAttendancePanel() {
   const weekStart = getWeekStartYmd();
   const monthStart = getMonthStartYmd();
 
-  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState(() => formatCountdown(msUntilMidnight()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [successPulse, setSuccessPulse] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanResult, setScanResult] = useState<QrCheckInResult | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const codeQuery = useDailyAttendanceCode(client, gymId, Boolean(gymId));
   const myTodayQuery = useMemberAttendanceToday(client, userId, today);
   const historyQuery = useMemberAttendanceHistory(client, userId, 120);
   const gymTodayQuery = useGymAttendanceToday(client, gymId, today);
   const activeMembersQuery = useGymMembers(client, gymId, 'active');
-  const selfCheckIn = useSelfCheckIn(client);
   const qrCheckIn = useCheckInByQrToken(client);
 
   const history = historyQuery.data ?? [];
   const checkedIn = Boolean(myTodayQuery.data);
-  const checkInTime = myTodayQuery.data?.checked_in_at;
 
   const attendedDates = useMemo(
     () => new Set(history.map((r) => r.attendance_date)),
@@ -342,27 +337,6 @@ export function MemberAttendancePanel() {
     }
   }, [codeQuery.data]);
 
-  async function handleSelfCheckIn() {
-    if (!gymId) return;
-    setStatus(null);
-    setError(null);
-    try {
-      const result = await selfCheckIn.mutateAsync(gymId);
-      setStatus(
-        result.already_marked
-          ? 'You were already checked in today.'
-          : 'Checked in successfully.',
-      );
-      setSuccessPulse(true);
-      window.setTimeout(() => setSuccessPulse(false), 1600);
-      await myTodayQuery.refetch();
-      await gymTodayQuery.refetch();
-      await historyQuery.refetch();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Self check-in failed.');
-    }
-  }
-
   async function handleQrToken(token: string) {
     setError(null);
     setStatus(null);
@@ -372,8 +346,6 @@ export function MemberAttendancePanel() {
       setScanResult(result);
       if (result.success) {
         setStatus(result.message);
-        setSuccessPulse(true);
-        window.setTimeout(() => setSuccessPulse(false), 1800);
         await myTodayQuery.refetch();
         await gymTodayQuery.refetch();
         await historyQuery.refetch();
@@ -409,7 +381,8 @@ export function MemberAttendancePanel() {
           Attendance
         </h1>
         <p className="text-sm text-muted-foreground">
-          Show your code at reception, or check in at {gym?.name ?? 'your gym'}.
+          Show your code at reception, or scan the gym QR to check in at{' '}
+          {gym?.name ?? 'your gym'}.
         </p>
       </header>
 
@@ -458,7 +431,7 @@ export function MemberAttendancePanel() {
               </span>
             </div>
 
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <div className="mt-6 flex flex-col items-stretch gap-2 sm:mx-auto sm:max-w-xs">
               <Button
                 type="button"
                 className="min-h-12 rounded-2xl bg-emerald-600 px-6 hover:bg-emerald-700"
@@ -467,6 +440,15 @@ export function MemberAttendancePanel() {
               >
                 <Copy className="size-4" aria-hidden />
                 {copied ? 'Copied!' : 'Copy Code'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 rounded-2xl"
+                onClick={() => setScannerOpen((v) => !v)}
+              >
+                <ScanLine className="size-4" aria-hidden />
+                {scannerOpen ? 'Hide QR scanner' : 'Scan Gym QR'}
               </Button>
             </div>
             <AnimatePresence>
@@ -482,93 +464,6 @@ export function MemberAttendancePanel() {
                 </motion.p>
               ) : null}
             </AnimatePresence>
-          </div>
-        </GlassCard>
-
-        {/* Status + crowd stack */}
-        <div className="flex flex-col gap-4">
-          <GlassCard
-            className={cn(
-              'relative overflow-hidden p-5 sm:p-6 transition-shadow',
-              successPulse && 'ring-2 ring-emerald-500/60',
-            )}
-          >
-            <AnimatePresence>
-              {successPulse ? (
-                <motion.div
-                  initial={{ opacity: 0.6, scale: 0.8 }}
-                  animate={{ opacity: 0, scale: 1.4 }}
-                  exit={{ opacity: 0 }}
-                  className="pointer-events-none absolute inset-0 bg-emerald-400/20"
-                  aria-hidden
-                />
-              ) : null}
-            </AnimatePresence>
-
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight">Check-in status</h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">Today at {gym?.name ?? 'the gym'}</p>
-              </div>
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold',
-                  checkedIn
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-muted text-muted-foreground',
-                )}
-              >
-                {checkedIn ? 'Present' : 'Away'}
-              </span>
-            </div>
-
-            <div className="mt-5 flex items-start gap-3">
-              <span
-                className={cn(
-                  'inline-flex size-12 shrink-0 items-center justify-center rounded-2xl',
-                  checkedIn
-                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-                    : 'bg-muted text-muted-foreground',
-                )}
-              >
-                {checkedIn ? (
-                  <CheckCircle2 className="size-6" aria-hidden />
-                ) : (
-                  <Moon className="size-6" aria-hidden />
-                )}
-              </span>
-              <div>
-                <p className="text-lg font-semibold tracking-tight">
-                  {checkedIn ? 'Checked in successfully' : 'Not Checked In Yet'}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {checkedIn && checkInTime
-                    ? `Checked in at ${formatTime(checkInTime)}`
-                    : 'Visit the gym and use your code — or self check-in below.'}
-                </p>
-              </div>
-            </div>
-
-            <Button
-              className="mt-5 min-h-12 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => void handleSelfCheckIn()}
-              disabled={selfCheckIn.isPending || checkedIn || !gymId}
-            >
-              {checkedIn
-                ? 'Already checked in'
-                : selfCheckIn.isPending
-                  ? 'Checking in…'
-                  : 'Self check-in'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-2 min-h-12 w-full rounded-2xl"
-              onClick={() => setScannerOpen((v) => !v)}
-            >
-              <ScanLine className="size-4" />
-              {scannerOpen ? 'Hide QR scanner' : 'Scan Gym QR'}
-            </Button>
             {status ? (
               <p className="mt-3 text-sm font-medium text-emerald-600 dark:text-emerald-400" role="status">
                 {status}
@@ -579,24 +474,18 @@ export function MemberAttendancePanel() {
                 {error}
               </p>
             ) : null}
-          </GlassCard>
 
-          <AnimatePresence>
-            {scannerOpen ? (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-              >
-                <GlassCard className="p-5 sm:p-6">
-                  <div className="mb-4 flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-semibold tracking-tight">Scan Gym QR</h2>
-                      <p className="mt-0.5 text-sm text-muted-foreground">
-                        Works for your home gym and active partner gyms
-                      </p>
-                    </div>
-                  </div>
+            <AnimatePresence>
+              {scannerOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  className="mt-5 text-left"
+                >
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Works for your home gym and active partner gyms
+                  </p>
                   <GymQrScanner
                     disabled={qrCheckIn.isPending}
                     onToken={(token) => void handleQrToken(token)}
@@ -607,102 +496,142 @@ export function MemberAttendancePanel() {
                       {scanResult.monthly_limit ?? 3}
                     </p>
                   ) : null}
-                </GlassCard>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        </GlassCard>
 
-          <GlassCard className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight">Live Gym Crowd</h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">Occupancy right now</p>
-              </div>
-              <span className={cn('text-sm font-semibold', crowdUi.tone)}>{crowdUi.label}</span>
+        {/* Live crowd */}
+        <GlassCard className="p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Live Gym Crowd</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">Occupancy right now</p>
             </div>
+            <span className={cn('text-sm font-semibold', crowdUi.tone)}>{crowdUi.label}</span>
+          </div>
 
-            {gymTodayQuery.isError || !gymId ? (
-              <div className="mt-6 flex flex-col items-center rounded-2xl border border-dashed border-border/70 py-8 text-center">
-                <Users className="size-8 text-muted-foreground/50" aria-hidden />
-                <p className="mt-2 text-sm font-medium">Crowd information unavailable</p>
-                <p className="mt-1 text-xs text-muted-foreground">Try again in a moment.</p>
+          {gymTodayQuery.isError || !gymId ? (
+            <div className="mt-6 flex flex-col items-center rounded-2xl border border-dashed border-border/70 py-8 text-center">
+              <Users className="size-8 text-muted-foreground/50" aria-hidden />
+              <p className="mt-2 text-sm font-medium">Crowd information unavailable</p>
+              <p className="mt-1 text-xs text-muted-foreground">Try again in a moment.</p>
+            </div>
+          ) : (
+            <>
+              <div className="mt-5 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-4xl font-semibold tracking-tight tabular-nums">{liveCount}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    live · {activeCount} active members
+                  </p>
+                </div>
+                <Users className="size-8 text-emerald-600/60 dark:text-emerald-400/60" aria-hidden />
               </div>
-            ) : (
-              <>
-                <div className="mt-5 flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-4xl font-semibold tracking-tight tabular-nums">{liveCount}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      live · {activeCount} active members
-                    </p>
-                  </div>
-                  <Users className="size-8 text-emerald-600/60 dark:text-emerald-400/60" aria-hidden />
+              <div
+                className="mt-5"
+                role="meter"
+                aria-valuemin={0}
+                aria-valuemax={5}
+                aria-valuenow={crowdLevel}
+                aria-label={`Crowd level ${crowdUi.label}`}
+              >
+                <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                  <motion.div
+                    className={cn('h-full rounded-full bg-gradient-to-r', crowdUi.bar)}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${crowdProgress}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
                 </div>
-                <div
-                  className="mt-5"
-                  role="meter"
-                  aria-valuemin={0}
-                  aria-valuemax={5}
-                  aria-valuenow={crowdLevel}
-                  aria-label={`Crowd level ${crowdUi.label}`}
-                >
-                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                    <motion.div
-                      className={cn('h-full rounded-full bg-gradient-to-r', crowdUi.bar)}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${crowdProgress}%` }}
-                      transition={{ duration: 0.6, ease: 'easeOut' }}
-                    />
-                  </div>
-                  <div className="mt-2 flex justify-between text-[10px] font-medium tracking-wide text-muted-foreground uppercase sm:text-[11px]">
-                    {['Empty', 'Low', 'Moderate', 'Busy', 'Very Busy'].map((label) => (
-                      <span
-                        key={label}
-                        className={cn(label === crowdUi.label && crowdUi.tone)}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
+                <div className="mt-2 flex justify-between text-[10px] font-medium tracking-wide text-muted-foreground uppercase sm:text-[11px]">
+                  {['Empty', 'Low', 'Moderate', 'Busy', 'Very Busy'].map((label) => (
+                    <span
+                      key={label}
+                      className={cn(label === crowdUi.label && crowdUi.tone)}
+                    >
+                      {label}
+                    </span>
+                  ))}
                 </div>
-                <p className="mt-4 text-sm text-muted-foreground">{crowdUi.tip}</p>
-              </>
-            )}
-          </GlassCard>
-        </div>
+              </div>
+              <p className="mt-4 text-sm text-muted-foreground">{crowdUi.tip}</p>
+            </>
+          )}
+        </GlassCard>
       </div>
 
       {/* Stats */}
       <section aria-label="Attendance statistics">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Attendance Statistics</h2>
-        <div className="grid gap-3 grid-cols-2 xl:grid-cols-5">
-          {[
-            { label: 'This week', value: weekVisits, icon: ClipboardList },
-            { label: 'This month', value: monthVisits, icon: CalendarIcon },
-            { label: 'Current streak', value: currentStreak, icon: Flame },
-            { label: 'Longest streak', value: bestStreak, icon: Trophy },
-            { label: 'Total visits', value: totalVisits, icon: Award },
-          ].map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <GlassCard key={stat.label} className="p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground sm:text-sm">
-                      {stat.label}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">
-                      {stat.value}
-                    </p>
+        <GlassCard className="overflow-hidden">
+          <button
+            type="button"
+            className="flex min-h-14 w-full items-center justify-between gap-3 px-5 py-4 text-left sm:px-6"
+            onClick={() => setStatsOpen((v) => !v)}
+            aria-expanded={statsOpen}
+          >
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Attendance Statistics</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Week, month, streaks, and total visits
+              </p>
+            </div>
+            <ChevronDown
+              className={cn(
+                'size-5 shrink-0 text-muted-foreground transition-transform',
+                statsOpen && 'rotate-180',
+              )}
+              aria-hidden
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {statsOpen ? (
+              <motion.div
+                key="stats"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="overflow-hidden"
+              >
+                <div className="border-t border-border/60 px-5 pb-5 pt-4 sm:px-6">
+                  <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+                    {[
+                      { label: 'This week', value: weekVisits, icon: ClipboardList },
+                      { label: 'This month', value: monthVisits, icon: CalendarIcon },
+                      { label: 'Current streak', value: currentStreak, icon: Flame },
+                      { label: 'Longest streak', value: bestStreak, icon: Trophy },
+                      { label: 'Total visits', value: totalVisits, icon: Award },
+                    ].map((stat) => {
+                      const Icon = stat.icon;
+                      return (
+                        <div
+                          key={stat.label}
+                          className="rounded-2xl border border-border/60 bg-background/40 p-4 sm:p-5"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground sm:text-sm">
+                                {stat.label}
+                              </p>
+                              <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">
+                                {stat.value}
+                              </p>
+                            </div>
+                            <span className="inline-flex size-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                              <Icon className="size-4" aria-hidden />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <span className="inline-flex size-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                    <Icon className="size-4" aria-hidden />
-                  </span>
                 </div>
-              </GlassCard>
-            );
-          })}
-        </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </GlassCard>
       </section>
 
       {/* Heatmap + motivation */}
@@ -782,166 +711,173 @@ export function MemberAttendancePanel() {
 
       {/* Achievements */}
       <section aria-label="Achievements">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Achievements</h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {achievements.map((a) => {
-            const Icon = a.icon;
-            return (
-              <GlassCard
-                key={a.id}
-                className={cn(
-                  'p-4 transition-colors sm:p-5',
-                  !a.earned && 'opacity-60 grayscale',
-                )}
+        <GlassCard className="overflow-hidden">
+          <button
+            type="button"
+            className="flex min-h-14 w-full items-center justify-between gap-3 px-5 py-4 text-left sm:px-6"
+            onClick={() => setAchievementsOpen((v) => !v)}
+            aria-expanded={achievementsOpen}
+          >
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Achievements</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Badges earned from your gym habits
+              </p>
+            </div>
+            <ChevronDown
+              className={cn(
+                'size-5 shrink-0 text-muted-foreground transition-transform',
+                achievementsOpen && 'rotate-180',
+              )}
+              aria-hidden
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {achievementsOpen ? (
+              <motion.div
+                key="achievements"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="overflow-hidden"
               >
-                <div className="flex items-start gap-3">
-                  <span
-                    className={cn(
-                      'inline-flex size-11 items-center justify-center rounded-2xl',
-                      a.earned
-                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {a.earned ? (
-                      <Icon className="size-5" aria-hidden />
-                    ) : (
-                      <Lock className="size-4" aria-hidden />
-                    )}
-                  </span>
-                  <div>
-                    <p className="font-semibold">{a.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{a.description}</p>
-                    <p
-                      className={cn(
-                        'mt-2 text-xs font-semibold',
-                        a.earned
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-muted-foreground',
-                      )}
-                    >
-                      {a.earned ? 'Earned' : 'Locked'}
-                    </p>
+                <div className="border-t border-border/60 px-5 pb-5 pt-4 sm:px-6">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {achievements.map((a) => {
+                      const Icon = a.icon;
+                      return (
+                        <div
+                          key={a.id}
+                          className={cn(
+                            'rounded-2xl border border-border/60 bg-background/40 p-4 transition-colors sm:p-5',
+                            !a.earned && 'opacity-60 grayscale',
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span
+                              className={cn(
+                                'inline-flex size-11 items-center justify-center rounded-2xl',
+                                a.earned
+                                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-muted text-muted-foreground',
+                              )}
+                            >
+                              {a.earned ? (
+                                <Icon className="size-5" aria-hidden />
+                              ) : (
+                                <Lock className="size-4" aria-hidden />
+                              )}
+                            </span>
+                            <div>
+                              <p className="font-semibold">{a.title}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{a.description}</p>
+                              <p
+                                className={cn(
+                                  'mt-2 text-xs font-semibold',
+                                  a.earned
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
+                                {a.earned ? 'Earned' : 'Locked'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </GlassCard>
-            );
-          })}
-        </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </GlassCard>
       </section>
 
       {/* Recent visits timeline */}
       <section id="history" aria-label="Recent visits" className="scroll-mt-24">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Recent Visits</h2>
-        {historyQuery.isLoading ? (
-          <div className="h-32 animate-pulse rounded-[20px] bg-muted" />
-        ) : history.length === 0 ? (
-          <GlassCard className="flex flex-col items-center px-6 py-14 text-center">
-            <ClipboardList className="size-10 text-muted-foreground/40" aria-hidden />
-            <p className="mt-4 text-base font-semibold">No attendance history yet</p>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              Your visits will appear here after your first check-in. Show your code at reception
-              to get started.
-            </p>
-          </GlassCard>
-        ) : (
-          <div className="relative space-y-3 before:absolute before:top-3 before:bottom-3 before:left-[1.35rem] before:w-px before:bg-border/80 sm:before:left-6">
-            {history.slice(0, 20).map((row) => (
-              <GlassCard key={row.id} className="relative ml-0 p-4 pl-12 sm:pl-14">
-                <span className="absolute top-5 left-3.5 inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 sm:left-4 dark:text-emerald-400">
-                  <CheckCircle2 className="size-3.5" aria-hidden />
-                </span>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{formatDateLabel(row.attendance_date)}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {formatTime(row.checked_in_at)} ·{' '}
-                      <span className="capitalize">
-                        {row.check_in_method.replace(/_/g, ' ')}
-                      </span>
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                    Present
-                  </span>
-                </div>
-              </GlassCard>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Quick actions */}
-      <section aria-label="Quick actions">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Quick Actions</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <a
-            href="#history"
-            className={cn(
-              buttonVariants({ variant: 'outline' }),
-              'min-h-12 justify-start rounded-2xl',
-            )}
-          >
-            <ClipboardList className="size-4" />
-            View Attendance History
-          </a>
-          <Button
+        <GlassCard className="overflow-hidden">
+          <button
             type="button"
-            variant="outline"
-            className="min-h-12 justify-start rounded-2xl"
-            onClick={() => setRulesOpen(true)}
+            className="flex min-h-14 w-full items-center justify-between gap-3 px-5 py-4 text-left sm:px-6"
+            onClick={() => setHistoryOpen((v) => !v)}
+            aria-expanded={historyOpen}
           >
-            <HelpCircle className="size-4" />
-            Gym Rules
-          </Button>
-          <a
-            href={`mailto:${gym?.contact_email || ''}?subject=${encodeURIComponent('Attendance issue')}`}
-            className={cn(
-              buttonVariants({ variant: 'outline' }),
-              'min-h-12 justify-start rounded-2xl',
-            )}
-          >
-            <Mail className="size-4" />
-            Report an Issue
-          </a>
-          {gym?.phone ? (
-            <a
-              href={`tel:${gym.phone}`}
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Recent Visits</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {history.length > 0
+                  ? `${Math.min(history.length, 20)} recent check-in${history.length === 1 ? '' : 's'}`
+                  : 'Your visit history'}
+              </p>
+            </div>
+            <ChevronDown
               className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'min-h-12 justify-start rounded-2xl',
+                'size-5 shrink-0 text-muted-foreground transition-transform',
+                historyOpen && 'rotate-180',
               )}
-            >
-              <Phone className="size-4" />
-              Contact Reception
-            </a>
-          ) : (
-            <Link
-              href="/member"
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'min-h-12 justify-start rounded-2xl',
-              )}
-            >
-              <Phone className="size-4" />
-              Contact Reception
-            </Link>
-          )}
-        </div>
+              aria-hidden
+            />
+          </button>
+          <AnimatePresence initial={false}>
+            {historyOpen ? (
+              <motion.div
+                key="history"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="overflow-hidden"
+              >
+                <div className="border-t border-border/60 px-5 pb-5 pt-4 sm:px-6">
+                  {historyQuery.isLoading ? (
+                    <div className="h-32 animate-pulse rounded-[20px] bg-muted" />
+                  ) : history.length === 0 ? (
+                    <div className="flex flex-col items-center px-6 py-10 text-center">
+                      <ClipboardList className="size-10 text-muted-foreground/40" aria-hidden />
+                      <p className="mt-4 text-base font-semibold">No attendance history yet</p>
+                      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                        Your visits will appear here after your first check-in. Show your code at
+                        reception to get started.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="relative space-y-3 before:absolute before:top-3 before:bottom-3 before:left-[1.35rem] before:w-px before:bg-border/80 sm:before:left-6">
+                      {history.slice(0, 20).map((row) => (
+                        <div
+                          key={row.id}
+                          className="relative rounded-2xl border border-border/60 bg-background/40 p-4 pl-12 sm:pl-14"
+                        >
+                          <span className="absolute top-5 left-3.5 inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 sm:left-4 dark:text-emerald-400">
+                            <CheckCircle2 className="size-3.5" aria-hidden />
+                          </span>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold">
+                                {formatDateLabel(row.attendance_date)}
+                              </p>
+                              <p className="mt-0.5 text-sm text-muted-foreground">
+                                {formatTime(row.checked_in_at)} ·{' '}
+                                <span className="capitalize">
+                                  {row.check_in_method.replace(/_/g, ' ')}
+                                </span>
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                              Present
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </GlassCard>
       </section>
-
-      {/* Sticky mobile self check-in when not checked in */}
-      {!checkedIn && gymId ? (
-        <div className="fixed inset-x-0 bottom-16 z-20 border-t border-border/80 bg-background/90 p-3 backdrop-blur lg:hidden">
-          <Button
-            className="min-h-12 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-            onClick={() => void handleSelfCheckIn()}
-            disabled={selfCheckIn.isPending}
-          >
-            {selfCheckIn.isPending ? 'Checking in…' : 'Self check-in'}
-          </Button>
-        </div>
-      ) : null}
 
       {rulesOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
