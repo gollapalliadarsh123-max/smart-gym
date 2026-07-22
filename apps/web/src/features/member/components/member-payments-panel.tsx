@@ -210,8 +210,6 @@ function openReceipt(html: string, action: 'view' | 'print' | 'download', filena
   }
 }
 
-}
-
 export function MemberPaymentsPanel() {
   const { client, userId, profile, gym, membership } = useMemberContext();
   const today = getTodayYmd();
